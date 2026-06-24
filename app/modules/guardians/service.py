@@ -7,15 +7,23 @@ from app.modules.daycares.repository import DaycareRepository
 from app.modules.children.repository import ChildRepository
 from app.modules.guardians.schemas import (
     GuardianCreate, GuardianResponse, LinkedDaycareResponse,
-    LinkedChildResponse, LocationSchema, MonitoringSummaryResponse, MonitoringChildSummary
+    LinkedChildResponse, LocationSchema, MonitoringSummaryResponse, MonitoringChildSummary,
+    GuardianCreateRequest, GuardianCreateResponse, GuardianResetPinResponse,
+    GuardianChildLinkRequest, GuardianDaycareResponse, GuardianChildResponse,
+    GuardianMonitoringSummaryResponse
 )
 
 class GuardianService:
     @staticmethod
-    async def create_guardian(db: AsyncSession, guardian_in: GuardianCreate) -> GuardianResponse:
+    async def create_guardian(db: AsyncSession, guardian_in: GuardianCreateRequest) -> GuardianCreateResponse:
         """Crea un perfil de tutor."""
         guardian = await GuardianRepository.create(db, guardian_in)
-        return GuardianResponse.model_validate(guardian)
+        return GuardianCreateResponse(
+            id=guardian.id,
+            code=guardian.code,
+            temporary_pin=guardian.temporary_pin,
+            full_name=guardian.full_name
+        )
 
     @staticmethod
     async def link_daycare_by_code(db: AsyncSession, guardian_id: uuid.UUID, daycare_code: str) -> None:
@@ -49,13 +57,8 @@ class GuardianService:
         relationship: str
     ) -> None:
         """
-        Vincula un niño con un tutor.
-        Validaciones:
-        - La guardería debe existir.
-        - El niño debe existir.
-        - El niño debe pertenecer a esa guardería.
-        - El tutor debe estar vinculado a la guardería.
-        - No debe estar ya vinculado con ese niño.
+        Vincula un niño con un tutor por su ID y códigos de negocio.
+        Si la relación con la guardería no existe, la crea automáticamente.
         """
         daycare = await DaycareRepository.get_by_code(db, daycare_code)
         if not daycare:
@@ -71,12 +74,10 @@ class GuardianService:
                 f"El niño '{child_code}' no pertenece a la guardería '{daycare_code}'."
             )
 
-        # El tutor debe estar vinculado a la guardería
+        # Vincular con la guardería si no lo está
         daycare_link = await GuardianRepository.get_daycare_link(db, guardian_id, daycare.id)
         if not daycare_link:
-            raise ForbiddenException(
-                f"El tutor debe estar vinculado a la guardería '{daycare_code}' antes de vincular un niño."
-            )
+            await GuardianRepository.link_daycare(db, guardian_id, daycare.id)
 
         # No debe estar vinculado previamente con ese niño
         child_link = await GuardianRepository.get_child_link(db, guardian_id, child.id)
@@ -84,6 +85,54 @@ class GuardianService:
             raise ConflictException(f"El niño '{child_code}' ya está vinculado a este tutor.")
 
         await GuardianRepository.link_child(db, guardian_id, child.id, relationship)
+
+    @staticmethod
+    async def link_child_by_guardian_code(
+        db: AsyncSession,
+        guardian_code: str,
+        daycare_code: str,
+        child_code: str,
+        relationship: str
+    ) -> None:
+        """
+        Vincula un niño con un tutor utilizando el código de tutor.
+        """
+        guardian = await GuardianRepository.get_by_code(db, guardian_code)
+        if not guardian:
+            raise NotFoundException(f"Tutor con código '{guardian_code}' no encontrado.")
+        await GuardianService.link_child_by_code(
+            db=db,
+            guardian_id=guardian.id,
+            daycare_code=daycare_code,
+            child_code=child_code,
+            relationship=relationship
+        )
+
+    @staticmethod
+    async def reset_guardian_pin(db: AsyncSession, guardian_code: str) -> dict:
+        """
+        Resetea el PIN de acceso del tutor y lo devuelve.
+        """
+        guardian = await GuardianRepository.get_by_code(db, guardian_code)
+        if not guardian:
+            raise NotFoundException(f"Tutor con código '{guardian_code}' no encontrado.")
+            
+        import random
+        import string
+        from app.core.security import get_pin_hash
+        
+        temporary_pin = "".join(random.choices(string.digits, k=4))
+        guardian.pin_hash = get_pin_hash(temporary_pin)
+        guardian.must_change_pin = True
+        guardian.failed_login_attempts = 0
+        guardian.locked_until = None
+        await db.flush()
+        
+        return {
+            "guardian_code": guardian.code,
+            "temporary_pin": temporary_pin,
+            "must_change_pin": True
+        }
 
     @staticmethod
     async def list_linked_daycares(db: AsyncSession, guardian_id: uuid.UUID) -> list[LinkedDaycareResponse]:

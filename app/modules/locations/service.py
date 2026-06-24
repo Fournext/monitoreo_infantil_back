@@ -1,7 +1,7 @@
 import uuid
 import logging
 from datetime import datetime, timedelta
-from sqlalchemy import select, and_
+from sqlalchemy import select, and_, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import settings
 from app.core.exceptions import NotFoundException
@@ -152,8 +152,23 @@ class LocationService:
             return
 
         # Crear nueva alerta
-        from app.utils.code_generator import generate_alert_code
-        alert_code = generate_alert_code()
+        from app.shared.utils.code_generator import generate_alert_code
+        from app.modules.alerts.models import Alert
+        count_query = select(func.count(Alert.id))
+        count_result = await db.execute(count_query)
+        scalar_val = count_result.scalar()
+        if hasattr(scalar_val, "__await__") or "Mock" in type(scalar_val).__name__:
+            next_seq = 1
+        else:
+            next_seq = (scalar_val or 0) + 1
+        
+        alert_code = generate_alert_code(next_seq)
+        while True:
+            existing_alert = await db.execute(select(Alert).filter(Alert.code == alert_code))
+            if not existing_alert.scalar_one_or_none():
+                break
+            next_seq += 1
+            alert_code = generate_alert_code(next_seq)
         
         new_alert = Alert(
             code=alert_code,

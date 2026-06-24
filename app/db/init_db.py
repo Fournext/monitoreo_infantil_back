@@ -1,4 +1,5 @@
 import asyncio
+import app.db.base_metadata
 from sqlalchemy import select
 from app.core.database import async_session_maker
 from app.core.constants import UserRole, DaycareStatus, GuardianStatus, ChildStatus
@@ -80,25 +81,19 @@ async def seed_data():
         existing_g = await db.execute(select(Guardian).filter(Guardian.email == guardian_email))
         db_g = existing_g.scalar_one_or_none()
         if not db_g:
+            from app.core.security import get_pin_hash
             db_g = Guardian(
+                code="TUT-7A91P",
                 full_name="Ana Vargas",
                 phone="70000001",
                 email=guardian_email,
+                pin_hash=get_pin_hash("1234"),
+                must_change_pin=True,
                 status=GuardianStatus.ACTIVE
             )
             db.add(db_g)
             await db.flush()
-            
-            # Asociar credenciales para login del tutor
-            db_user_g = User(
-                username="ana",
-                email=guardian_email,
-                hashed_password=get_password_hash("password123"),
-                role=UserRole.GUARDIAN,
-                guardian_id=db_g.id
-            )
-            db.add(db_user_g)
-            print("Tutor creado: Ana Vargas. Login: ana / password123")
+            print("Tutor creado: Ana Vargas. Código: TUT-7A91P, PIN: 1234")
             
             # Vinculaciones requeridas:
             # A. Ana Vargas -> Guardería Los Pinos (GUA-SCZ-001)

@@ -4,13 +4,16 @@ from fastapi import APIRouter, Depends, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 from app.core.constants import UserRole
-from app.core.exceptions import ForbiddenException
-from app.modules.auth.service import require_roles, UserService
+from app.modules.auth.dependencies import (
+    get_current_user, get_current_guardian, require_daycare_manager, require_admin
+)
 from app.modules.auth.models import User
+from app.modules.guardians.models import Guardian
 from app.modules.guardians.schemas import (
-    GuardianCreate, GuardianResponse, LinkDaycareRequest,
-    LinkChildRequest, LinkedDaycareResponse, LinkedChildResponse,
-    MonitoringSummaryResponse
+    GuardianCreateRequest, GuardianCreateResponse, GuardianResponse,
+    GuardianResetPinResponse, GuardianChildLinkRequest, GuardianDaycareResponse,
+    GuardianChildResponse, GuardianMonitoringSummaryResponse, GuardianChildrenListResponse,
+    LinkDaycareRequest, LinkChildRequest, LinkedDaycareResponse
 )
 from app.modules.guardians.service import GuardianService
 from app.modules.alerts.service import AlertService
@@ -18,119 +21,168 @@ from app.modules.alerts.schemas import AlertResponse
 
 router = APIRouter(prefix="/api/guardians", tags=["Tutores / Guardianes"])
 
-def verify_guardian_access(guardian_id: uuid.UUID, current_user: User):
-    """
-    Verifica que el usuario solicitante sea ADMIN, o sea el tutor dueño de los recursos
-    (guardian_id del usuario coincide con el guardian_id de la ruta).
-    """
-    if current_user.role != UserRole.ADMIN:
-        if current_user.guardian_id != guardian_id:
-            raise ForbiddenException("No tienes permisos para acceder o modificar los recursos de este tutor.")
-
-@router.post("", response_model=GuardianResponse, status_code=status.HTTP_201_CREATED)
+# Admin: Crear tutor
+@router.post("", response_model=GuardianCreateResponse, status_code=status.HTTP_201_CREATED)
 async def create_guardian(
-    guardian_in: GuardianCreate,
+    guardian_in: GuardianCreateRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.ADMIN))
+    current_user: User = Depends(require_daycare_manager)
 ):
     """
-    Crea un tutor. (Acceso: ADMIN)
+    Crea un tutor. Retorna el código y el PIN temporal. (Acceso: ADMIN, DAYCARE_MANAGER)
     """
     guardian = await GuardianService.create_guardian(db, guardian_in)
     await db.commit()
     return guardian
 
-@router.post("/{guardian_id}/link-daycare", status_code=status.HTTP_200_OK)
-async def link_daycare(
-    guardian_id: uuid.UUID,
-    link_in: LinkDaycareRequest,
+# Admin: Vincular tutor con niño
+@router.post("/{guardian_code}/link-child", status_code=status.HTTP_200_OK)
+async def link_child_admin(
+    guardian_code: str,
+    link_in: GuardianChildLinkRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.GUARDIAN))
+    current_user: User = Depends(require_daycare_manager)
 ):
     """
-    Vincula al tutor con una guardería utilizando el código. (Acceso: ADMIN, GUARDIAN propio)
+    Vincula un tutor con un niño usando sus respectivos códigos. (Acceso: ADMIN, DAYCARE_MANAGER)
     """
-    verify_guardian_access(guardian_id, current_user)
-    await GuardianService.link_daycare_by_code(db, guardian_id, link_in.daycare_code)
-    await db.commit()
-    return {"message": f"Guardería vinculada correctamente al tutor {guardian_id}."}
-
-@router.post("/{guardian_id}/link-child", status_code=status.HTTP_200_OK)
-async def link_child(
-    guardian_id: uuid.UUID,
-    link_in: LinkChildRequest,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.GUARDIAN))
-):
-    """
-    Vincula a un niño con un tutor en base al código de la guardería y del niño. (Acceso: ADMIN, GUARDIAN propio)
-    El tutor debe estar previamente vinculado a la guardería.
-    """
-    verify_guardian_access(guardian_id, current_user)
-    await GuardianService.link_child_by_code(
+    await GuardianService.link_child_by_guardian_code(
         db=db,
-        guardian_id=guardian_id,
+        guardian_code=guardian_code,
         daycare_code=link_in.daycare_code,
         child_code=link_in.child_code,
         relationship=link_in.relationship
     )
     await db.commit()
-    return {"message": f"Niño {link_in.child_code} vinculado correctamente al tutor."}
+    return {"message": "Niño vinculado correctamente al tutor."}
 
-@router.get("/{guardian_id}/daycares", response_model=list[LinkedDaycareResponse])
-async def list_linked_daycares(
-    guardian_id: uuid.UUID,
+# Admin: Resetear PIN de tutor
+@router.patch("/{guardian_code}/reset-pin", response_model=GuardianResetPinResponse)
+async def reset_pin_admin(
+    guardian_code: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.GUARDIAN))
+    current_user: User = Depends(require_daycare_manager)
 ):
     """
-    Retorna la lista de todas las guarderías vinculadas al tutor. (Acceso: ADMIN, GUARDIAN propio)
+    Resetea el PIN de acceso del tutor y devuelve un PIN temporal. (Acceso: ADMIN, DAYCARE_MANAGER)
     """
-    verify_guardian_access(guardian_id, current_user)
-    return await GuardianService.list_linked_daycares(db, guardian_id)
+    result = await GuardianService.reset_guardian_pin(db, guardian_code)
+    await db.commit()
+    return result
 
-@router.get("/{guardian_id}/children", response_model=list[LinkedChildResponse])
-async def list_linked_children(
-    guardian_id: uuid.UUID,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.GUARDIAN))
+# --- ENDPOINTS /ME PARA EL TUTOR AUTENTICADO ---
+
+# Tutor: Obtener perfil propio
+@router.get("/me", response_model=GuardianResponse)
+async def get_my_profile(
+    current_guardian: Guardian = Depends(get_current_guardian)
 ):
     """
-    Lista todos los niños vinculados al tutor, indicando su última ubicación y estado. (Acceso: ADMIN, GUARDIAN propio)
+    Retorna el perfil del tutor autenticado. (Acceso: GUARDIAN propio)
     """
-    verify_guardian_access(guardian_id, current_user)
-    return await GuardianService.list_linked_children(db, guardian_id)
+    return current_guardian
 
-@router.get("/{guardian_id}/alerts", response_model=list[AlertResponse])
-async def list_guardian_alerts(
-    guardian_id: uuid.UUID,
+# Tutor: Obtener guarderías vinculadas
+@router.get("/me/daycares", response_model=list[LinkedDaycareResponse])
+async def list_my_daycares(
+    db: AsyncSession = Depends(get_db),
+    current_guardian: Guardian = Depends(get_current_guardian)
+):
+    """
+    Retorna las guarderías asociadas al tutor autenticado. (Acceso: GUARDIAN propio)
+    """
+    return await GuardianService.list_linked_daycares(db, current_guardian.id)
+
+# Tutor: Obtener niños vinculados
+@router.get("/me/children", response_model=GuardianChildrenListResponse)
+async def list_my_children(
+    db: AsyncSession = Depends(get_db),
+    current_guardian: Guardian = Depends(get_current_guardian)
+):
+    """
+    Lista los niños vinculados al tutor autenticado con su última ubicación y estado. (Acceso: GUARDIAN propio)
+    """
+    children = await GuardianService.list_linked_children(db, current_guardian.id)
+    formatted = []
+    for c in children:
+        monitoring_status = "NO_LOCATION"
+        last_loc_at = None
+        if c.last_location:
+            last_loc_at = c.last_location.received_at
+            if not c.last_location.is_inside_area:
+                monitoring_status = "OUTSIDE_AREA"
+            else:
+                monitoring_status = "INSIDE_AREA"
+                
+        formatted.append(
+            GuardianChildResponse(
+                child_code=c.code,
+                child_name=c.full_name,
+                daycare_code=c.daycare_code,
+                daycare_name=c.daycare_name,
+                monitoring_status=monitoring_status,
+                has_active_alert=c.has_active_alert,
+                last_location_at=last_loc_at
+            )
+        )
+    return GuardianChildrenListResponse(children=formatted)
+
+# Tutor: Obtener alertas
+@router.get("/me/alerts", response_model=list[AlertResponse])
+async def list_my_alerts(
     child_code: str | None = None,
     daycare_code: str | None = None,
     status: str | None = None,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.GUARDIAN))
+    current_guardian: Guardian = Depends(get_current_guardian)
 ):
     """
-    Lista las alertas de seguridad de los niños que están vinculados al tutor. (Acceso: ADMIN, GUARDIAN propio)
-    Filtros opcionales: child_code, daycare_code, status.
+    Lista las alertas de los niños vinculados al tutor autenticado. (Acceso: GUARDIAN propio)
     """
-    verify_guardian_access(guardian_id, current_user)
     return await AlertService.get_alerts_for_guardian(
         db=db,
-        guardian_id=guardian_id,
+        guardian_id=current_guardian.id,
         child_code=child_code,
         daycare_code=daycare_code,
         status_filter=status
     )
 
-@router.get("/{guardian_id}/monitoring-summary", response_model=MonitoringSummaryResponse)
-async def get_monitoring_summary(
-    guardian_id: uuid.UUID,
+# Tutor: Resumen de monitoreo
+@router.get("/me/monitoring-summary", response_model=GuardianMonitoringSummaryResponse)
+async def get_my_monitoring_summary(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.GUARDIAN))
+    current_guardian: Guardian = Depends(get_current_guardian)
 ):
     """
-    Obtiene el estado unificado y resumen de alertas para todos los niños del tutor. (Acceso: ADMIN, GUARDIAN propio)
+    Obtiene el estado unificado y resumen de alertas para el tutor autenticado. (Acceso: GUARDIAN propio)
     """
-    verify_guardian_access(guardian_id, current_user)
-    return await GuardianService.get_monitoring_summary(db, guardian_id)
+    summary = await GuardianService.get_monitoring_summary(db, current_guardian.id)
+    daycares = await GuardianService.list_linked_daycares(db, current_guardian.id)
+    total_daycares = len(daycares)
+    
+    return GuardianMonitoringSummaryResponse(
+        total_children=summary.total_children,
+        total_daycares=total_daycares,
+        active_alerts=summary.active_alerts,
+        children=summary.children
+    )
+
+# Tutor: Vincular niño desde Flutter
+@router.post("/me/link-child", status_code=status.HTTP_200_OK)
+async def link_child_mobile(
+    link_in: LinkChildRequest,
+    db: AsyncSession = Depends(get_db),
+    current_guardian: Guardian = Depends(get_current_guardian)
+):
+    """
+    Permite al tutor vincular un niño desde su aplicación móvil. (Acceso: GUARDIAN propio)
+    """
+    await GuardianService.link_child_by_code(
+        db=db,
+        guardian_id=current_guardian.id,
+        daycare_code=link_in.daycare_code,
+        child_code=link_in.child_code,
+        relationship=link_in.relationship
+    )
+    await db.commit()
+    return {"message": "Niño vinculado correctamente."}

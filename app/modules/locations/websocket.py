@@ -17,11 +17,43 @@ logger = logging.getLogger("app.websockets")
 router = APIRouter(tags=["WebSockets de Monitoreo"])
 
 @router.websocket("/ws/tracking/children/{child_code}/location")
-async def child_tracking_websocket(websocket: WebSocket, child_code: str):
+async def child_tracking_websocket(
+    websocket: WebSocket,
+    child_code: str,
+    token: str | None = Query(default=None)
+):
     """
     WebSocket por el cual los rastreadores GPS del niño transmiten la telemetría periódicamente.
-    Cierra sesión tras procesar cada mensaje para optimizar la pool de conexiones.
+    Valida token con rol TRACKING_DEVICE o ADMIN.
     """
+    query_params = websocket.query_params
+    token_str = token or query_params.get("token")
+    
+    async with async_session_maker() as db:
+        try:
+            # 1. Autenticación del rastreador
+            try:
+                user = await UserService.get_current_user_ws(token_str, db)
+            except Exception as auth_err:
+                logger.warning(f"Intento de conexión a WS de rastreador sin autorización para {child_code}: {auth_err}")
+                await websocket.close(code=4001, reason="No autorizado: Token inválido.")
+                return
+                
+            if user.role not in (UserRole.TRACKING_DEVICE, UserRole.ADMIN):
+                await websocket.close(code=4003, reason="Prohibido: Rol no autorizado para rastreo.")
+                return
+
+            # 2. Validar existencia del niño
+            child = await ChildRepository.get_by_code(db, child_code)
+            if not child:
+                await websocket.close(code=4004, reason="No encontrado: Niño no registrado.")
+                return
+
+        except Exception as init_err:
+            logger.error(f"Error inicializando WS de rastreador para niño {child_code}: {init_err}")
+            await websocket.close(code=1011, reason="Error interno de servidor.")
+            return
+
     await manager.connect_tracker(child_code, websocket)
     try:
         while True:
@@ -47,7 +79,6 @@ async def child_tracking_websocket(websocket: WebSocket, child_code: str):
                     )
                     await db.commit() # Confirmar inserciones de ubicación y alertas creadas
                 except Exception as ex:
-                    # Enviar log de error pero mantener el socket activo
                     logger.error(f"Error procesando lectura de tracker del niño {child_code}: {ex}")
                     
     except WebSocketDisconnect:
@@ -58,20 +89,19 @@ async def child_tracking_websocket(websocket: WebSocket, child_code: str):
         manager.disconnect_tracker(child_code)
 
 
-@router.websocket("/ws/guardians/{guardian_id}/children/{child_code}/live-location")
+@router.websocket("/ws/guardians/me/children/{child_code}/live-location")
 async def guardian_live_location_websocket(
     websocket: WebSocket,
-    guardian_id: uuid.UUID,
     child_code: str,
     token: str | None = Query(default=None)
 ):
     """
     WebSocket utilizado por la app móvil del tutor para ver en vivo al niño en el mapa.
     Seguridad:
-    - Valida validez de token JWT.
-    - Valida que pertenezca al tutor correspondiente o sea administrador.
-    - Valida que el niño exista y esté vinculado con el tutor.
-    Retorna la última ubicación conocida al conectarse y retransmite cada nueva actualización.
+    - Valida token JWT del tutor.
+    - Obtiene guardian_id desde el token.
+    - Verifica que ese tutor esté vinculado al niño (o sea Admin).
+    - Envia última ubicación conocida al conectarse y retransmite cada nueva actualización.
     """
     query_params = websocket.query_params
     token_str = token or query_params.get("token")
@@ -82,31 +112,42 @@ async def guardian_live_location_websocket(
             try:
                 user = await UserService.get_current_user_ws(token_str, db)
             except Exception as auth_err:
-                logger.warning(f"Intento de conexión a WS sin autorización para tutor {guardian_id}: {auth_err}")
+                logger.warning(f"Intento de conexión a WS sin autorización para mapa en vivo de {child_code}: {auth_err}")
                 await websocket.close(code=4001, reason="No autorizado: Token inválido.")
                 return
 
-            # 2. Control de accesos del tutor
-            if user.role != UserRole.ADMIN and user.guardian_id != guardian_id:
-                await websocket.close(code=4003, reason="Prohibido: No tienes acceso a este tutor.")
-                return
+            # 2. Control de accesos
+            is_admin = getattr(user, "role", None) in (UserRole.ADMIN, UserRole.DAYCARE_MANAGER)
+            
+            if not is_admin:
+                if not isinstance(user, Guardian):
+                    await websocket.close(code=4003, reason="Prohibido: Rol inválido.")
+                    return
+                
+                guardian_id = user.id
+                
+                # Validar existencia del niño
+                child = await ChildRepository.get_by_code(db, child_code)
+                if not child:
+                    await websocket.close(code=4004, reason="No encontrado: Niño no registrado.")
+                    return
 
-            # 3. Validar existencia del niño
-            child = await ChildRepository.get_by_code(db, child_code)
-            if not child:
-                await websocket.close(code=4004, reason="No encontrado: Niño no registrado.")
-                return
+                # Validar vinculación tutor-niño
+                link = await GuardianRepository.get_child_link(db, guardian_id, child.id)
+                if not link:
+                    await websocket.close(code=4003, reason="Prohibido: El tutor no está vinculado a este niño.")
+                    return
+            else:
+                child = await ChildRepository.get_by_code(db, child_code)
+                if not child:
+                    await websocket.close(code=4004, reason="No encontrado: Niño no registrado.")
+                    return
+                guardian_id = user.id
 
-            # 4. Validar vinculación tutor-niño
-            link = await GuardianRepository.get_child_link(db, guardian_id, child.id)
-            if not link and user.role != UserRole.ADMIN:
-                await websocket.close(code=4003, reason="Prohibido: El tutor no está vinculado a este niño.")
-                return
-
-            # 5. Aceptar conexión y registrar
+            # 3. Aceptar conexión y registrar
             await manager.connect_guardian(child_code, websocket)
 
-            # 6. Enviar última ubicación conocida de inmediato si existe
+            # 4. Enviar última ubicación conocida de inmediato si existe
             last_loc = await LocationRepository.get_last_location(db, child.id)
             if last_loc:
                 daycare = await DaycareRepository.get_by_id(db, child.daycare_id)
@@ -126,11 +167,11 @@ async def guardian_live_location_websocket(
                 await websocket.send_json(init_payload)
 
         except Exception as init_err:
-            logger.error(f"Error inicializando WebSocket para tutor {guardian_id}: {init_err}")
+            logger.error(f"Error inicializando WebSocket de mapa para tutor {guardian_id}: {init_err}")
             await websocket.close(code=1011, reason="Error interno de servidor.")
             return
 
-    # Escucha desconexiones de forma asíncrona para limpiar el ConnectionManager
+    # Escucha desconexiones
     try:
         while True:
             await websocket.receive_text()

@@ -7,6 +7,12 @@ from app.modules.daycares.models import Daycare
 from app.modules.children.models import Child
 from app.modules.guardians.schemas import GuardianCreate
 
+from app.shared.utils.code_generator import generate_guardian_code
+from app.core.security import get_pin_hash
+from app.core.constants import GuardianStatus
+import random
+import string
+
 class GuardianRepository:
     @staticmethod
     async def get_by_id(db: AsyncSession, guardian_id: uuid.UUID) -> Guardian | None:
@@ -15,15 +21,36 @@ class GuardianRepository:
         return result.scalar_one_or_none()
 
     @staticmethod
+    async def get_by_code(db: AsyncSession, code: str) -> Guardian | None:
+        """Busca un tutor por su código de negocio (e.g. TUT-7A91P)."""
+        result = await db.execute(select(Guardian).filter(Guardian.code == code))
+        return result.scalar_one_or_none()
+
+    @staticmethod
     async def create(db: AsyncSession, guardian_in: GuardianCreate) -> Guardian:
-        """Crea una nueva entidad de tutor."""
+        """Crea una nueva entidad de tutor con código y PIN temporal."""
+        code = generate_guardian_code()
+        while True:
+            existing = await db.execute(select(Guardian).filter(Guardian.code == code))
+            if not existing.scalar_one_or_none():
+                break
+            code = generate_guardian_code()
+            
+        temporary_pin = "".join(random.choices(string.digits, k=4))
+        
         db_guardian = Guardian(
+            code=code,
             full_name=guardian_in.full_name,
             phone=guardian_in.phone,
-            email=guardian_in.email
+            email=guardian_in.email,
+            pin_hash=get_pin_hash(temporary_pin),
+            must_change_pin=True,
+            status=GuardianStatus.ACTIVE
         )
         db.add(db_guardian)
         await db.flush()
+        # Adjuntar temporalmente para la capa superior
+        db_guardian.temporary_pin = temporary_pin
         return db_guardian
 
     @staticmethod

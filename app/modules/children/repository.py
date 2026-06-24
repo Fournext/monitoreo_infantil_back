@@ -3,7 +3,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from app.modules.children.models import Child
 from app.modules.children.schemas import ChildCreate
-from app.utils.code_generator import generate_child_code
+from app.shared.utils.code_generator import generate_child_code
 
 class ChildRepository:
     @staticmethod

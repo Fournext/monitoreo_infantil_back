@@ -2,6 +2,7 @@ from enum import Enum
 
 class UserRole(str, Enum):
     ADMIN = "ADMIN"
+    DAYCARE_MANAGER = "DAYCARE_MANAGER"
     GUARDIAN = "GUARDIAN"
     TRACKING_DEVICE = "TRACKING_DEVICE"
 
@@ -12,6 +13,7 @@ class DaycareStatus(str, Enum):
 class GuardianStatus(str, Enum):
     ACTIVE = "ACTIVE"
     INACTIVE = "INACTIVE"
+    BLOCKED = "BLOCKED"
 
 class ChildStatus(str, Enum):
     ACTIVE = "ACTIVE"

@@ -15,6 +15,14 @@ def get_password_hash(password: str) -> str:
     """Genera el hash bcrypt de una contraseña."""
     return pwd_context.hash(password)
 
+def verify_pin(plain_pin: str, hashed_pin: str) -> bool:
+    """Verifica si un PIN coincide con su hash."""
+    return pwd_context.verify(plain_pin, hashed_pin)
+
+def get_pin_hash(pin: str) -> str:
+    """Genera el hash de un PIN."""
+    return pwd_context.hash(pin)
+
 def create_access_token(data: dict[str, Any], expires_delta: timedelta | None = None) -> str:
     """Genera un token de acceso JWT firmado."""
     to_encode = data.copy()

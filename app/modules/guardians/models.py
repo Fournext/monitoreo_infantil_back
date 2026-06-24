@@ -10,10 +10,16 @@ class Guardian(Base):
     __tablename__ = "guardians"
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    code: Mapped[str] = mapped_column(String(50), unique=True, index=True)
     full_name: Mapped[str] = mapped_column(String(100))
     phone: Mapped[str | None] = mapped_column(String(20), nullable=True)
     email: Mapped[str | None] = mapped_column(String(100), unique=True, index=True, nullable=True)
+    pin_hash: Mapped[str] = mapped_column(String(255))
+    must_change_pin: Mapped[bool] = mapped_column(default=True)
     status: Mapped[GuardianStatus] = mapped_column(Enum(GuardianStatus), default=GuardianStatus.ACTIVE)
+    last_login_at: Mapped[datetime | None] = mapped_column(nullable=True)
+    failed_login_attempts: Mapped[int] = mapped_column(default=0)
+    locked_until: Mapped[datetime | None] = mapped_column(nullable=True)
     
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(server_default=func.now(), onupdate=func.now())

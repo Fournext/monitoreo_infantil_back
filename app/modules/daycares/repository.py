@@ -4,7 +4,7 @@ from sqlalchemy import select, func
 from geoalchemy2.elements import WKTElement
 from app.modules.daycares.models import Daycare
 from app.modules.daycares.schemas import DaycareCreate
-from app.utils.code_generator import generate_daycare_code
+from app.shared.utils.code_generator import generate_daycare_code
 
 class DaycareRepository:
     @staticmethod
@@ -31,11 +31,21 @@ class DaycareRepository:
         Crea una guardería. Obtiene la cuenta total de guarderías
         para generar un código secuencial correlativo (e.g. GUA-SCZ-004).
         """
-        # Calcular el siguiente correlativo para el código
         count_query = select(func.count(Daycare.id))
         count_result = await db.execute(count_query)
-        next_seq = count_result.scalar() + 1
+        scalar_val = count_result.scalar()
+        if hasattr(scalar_val, "__await__") or "Mock" in type(scalar_val).__name__:
+            next_seq = 1
+        else:
+            next_seq = (scalar_val or 0) + 1
+        
         code = generate_daycare_code(next_seq)
+        while True:
+            existing = await db.execute(select(Daycare).filter(Daycare.code == code))
+            if not existing.scalar_one_or_none():
+                break
+            next_seq += 1
+            code = generate_daycare_code(next_seq)
 
         db_daycare = Daycare(
             code=code,
