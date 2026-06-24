@@ -1,0 +1,41 @@
+version: '3.8'
+
+services:
+  postgres-postgis:
+    image: postgis/postgis:15-3.3
+    container_name: postgres_postgis_db
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: monitoring_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d monitoring_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build: .
+    container_name: daycare_monitoring_api
+    ports:
+      - "8000:8000"
+    volumes:
+      - .:/workspace
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://postgres:postgres@postgres-postgis:5432/monitoring_db
+      - SECRET_KEY=change_me
+      - FIREBASE_CREDENTIALS_PATH=./firebase-service-account.json
+      - ALERT_OUTSIDE_CONSECUTIVE_LIMIT=3
+      - ALERT_OUTSIDE_SECONDS_LIMIT=15
+      - ALERT_COOLDOWN_SECONDS=300
+      - GPS_TOLERANCE_METERS=15
+    depends_on:
+      postgres-postgis:
+        condition: service_healthy
+
+volumes:
+  postgres_data:
