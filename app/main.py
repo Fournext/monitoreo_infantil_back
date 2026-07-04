@@ -5,6 +5,7 @@ from app.modules.daycares.router import router as daycares_router
 from app.modules.guardians.router import router as guardians_router
 from app.modules.children.router import router as children_router
 from app.modules.devices.router import router as devices_router
+from app.modules.tracking_devices.router import router as tracking_devices_router
 from app.modules.locations.router import router as locations_router
 from app.modules.locations.websocket import router as locations_ws_router
 from app.modules.alerts.router import router as alerts_router
@@ -30,6 +31,7 @@ app.include_router(daycares_router)
 app.include_router(guardians_router)
 app.include_router(children_router)
 app.include_router(devices_router)
+app.include_router(tracking_devices_router)
 app.include_router(locations_router)
 app.include_router(locations_ws_router) # Incluye WebSockets de tracking y dashboard
 app.include_router(alerts_router)

@@ -120,6 +120,27 @@ async def seed_data():
             db.add(link_c2)
             print("Vinculación de Ana Vargas establecida con: Guardería Los Pinos, Mateo y Luciana.")
 
+        # 5. Crear Código de Emparejamiento Semilla (PAIR-DEMO-001)
+        from app.modules.tracking_devices.models import TrackerPairingCode
+        from app.core.constants import PairingCodeStatus
+        from datetime import timedelta
+        from app.utils.date_utils import get_now
+        
+        existing_pc = await db.execute(select(TrackerPairingCode).filter(TrackerPairingCode.code == "PAIR-DEMO-001"))
+        db_pc = existing_pc.scalar_one_or_none()
+        if not db_pc:
+            mateo = child_map["NIN-8F42K"]
+            db_pc = TrackerPairingCode(
+                code="PAIR-DEMO-001",
+                child_id=mateo.id,
+                daycare_id=mateo.daycare_id,
+                created_by_user_id=None,
+                expires_at=get_now() + timedelta(minutes=60),
+                status=PairingCodeStatus.ACTIVE
+            )
+            db.add(db_pc)
+            print("Código de emparejamiento semilla creado: PAIR-DEMO-001 para Mateo Vargas.")
+
         await db.commit()
         print("¡Datos semilla insertados correctamente en la base de datos!")
 

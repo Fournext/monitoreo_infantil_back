@@ -140,7 +140,7 @@ class GuardianService:
         daycares = await GuardianRepository.get_linked_daycares(db, guardian_id)
         return [LinkedDaycareResponse.model_validate(d) for d in daycares]
 
-    @classmethod
+    @staticmethod
     async def list_linked_children(db: AsyncSession, guardian_id: uuid.UUID) -> list[LinkedChildResponse]:
         """Obtiene la lista de niños vinculados con su última ubicación y estado de alerta."""
         links = await GuardianRepository.get_linked_children_with_relations(db, guardian_id)
@@ -183,7 +183,7 @@ class GuardianService:
             )
         return response_list
 
-    @classmethod
+    @staticmethod
     async def get_monitoring_summary(db: AsyncSession, guardian_id: uuid.UUID) -> MonitoringSummaryResponse:
         """
         Obtiene el resumen de monitoreo en tiempo real de todos los niños de un tutor.

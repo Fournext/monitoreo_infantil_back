@@ -1,5 +1,6 @@
 import uuid
 import logging
+from typing import Any
 from datetime import datetime, timedelta
 from sqlalchemy import select, and_, func
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -22,6 +23,35 @@ from app.shared.websocket.connection_manager import manager
 logger = logging.getLogger("app.locations")
 
 class LocationService:
+    @classmethod
+    async def process_location_from_device(
+        cls,
+        db: AsyncSession,
+        device: Any,
+        loc_in: LocationInput
+    ) -> None:
+        """
+        Procesa la telemetría enviada por el dispositivo del niño resolviendo la entidad y la guardería.
+        """
+        from app.utils.date_utils import get_now
+        
+        # 1. Obtener niño asociado
+        child = await ChildRepository.get_by_id(db, device.child_id)
+        if not child:
+            logger.error(f"El dispositivo {device.id} no tiene un niño asociado válido.")
+            raise NotFoundException("Dispositivo no está vinculado a un niño registrado.")
+
+        # Actualizar last_seen_at del dispositivo
+        device.last_seen_at = get_now()
+        await db.flush()
+
+        # 2. Delegar a la lógica de procesamiento principal
+        await cls.process_child_location(
+            db=db,
+            child_code=child.code,
+            loc_in=loc_in
+        )
+
     @classmethod
     async def process_child_location(
         cls,

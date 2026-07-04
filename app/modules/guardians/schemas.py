@@ -99,6 +99,7 @@ class LinkedChildResponse(BaseModel):
 class GuardianChildResponse(BaseModel):
     child_code: str
     child_name: str
+    child_age: int | None = None
     daycare_code: str
     daycare_name: str
     monitoring_status: str
@@ -114,6 +115,7 @@ class GuardianChildrenListResponse(BaseModel):
 class MonitoringChildSummary(BaseModel):
     child_code: str
     child_name: str
+    child_age: int | None = None
     daycare_code: str
     daycare_name: str
     monitoring_status: str  # INSIDE_AREA, OUTSIDE_AREA, NO_LOCATION

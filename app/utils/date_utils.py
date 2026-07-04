@@ -1,8 +1,8 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime, timezone
 
 def get_now() -> datetime:
     """Retorna la fecha y hora actual con información de zona horaria UTC."""
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC).replace(tzinfo=None)
 
 def parse_iso_datetime(dt_str: str) -> datetime:
     """Parsea una cadena en formato ISO a un objeto datetime. Si falla, retorna la hora actual."""

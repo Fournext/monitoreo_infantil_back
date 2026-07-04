@@ -1,5 +1,8 @@
 import uuid
 import logging
+from typing import Any
+from sqlalchemy.ext.asyncio import AsyncSession
+from app.modules.guardians.models import Guardian
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Query
 from app.core.database import async_session_maker
 from app.core.constants import UserRole
@@ -16,12 +19,118 @@ from app.shared.websocket.connection_manager import manager
 logger = logging.getLogger("app.websockets")
 router = APIRouter(tags=["WebSockets de Monitoreo"])
 
+async def get_tracking_device_for_ws(token: str | None, db: AsyncSession) -> Any:
+    import hashlib
+    from sqlalchemy import select
+    from app.modules.devices.models import Device
+    from app.core.constants import DeviceType, UserRole
+    from app.core.security import decode_access_token
+    from app.core.exceptions import UnauthorizedException, ForbiddenException
+    
+    if not token:
+        raise UnauthorizedException("Falta el token de autenticación del dispositivo.")
+        
+    payload = decode_access_token(token)
+    if not payload:
+        raise UnauthorizedException("El token de rastreo es inválido o ha expirado.")
+        
+    role = payload.get("role")
+    device_id_str = payload.get("sub")
+    
+    if role != UserRole.TRACKING_DEVICE.value or not device_id_str:
+        raise ForbiddenException("Token inválido para un dispositivo rastreador.")
+        
+    try:
+        device_id = uuid.UUID(device_id_str)
+    except ValueError:
+        raise UnauthorizedException("El identificador del dispositivo es inválido.")
+        
+    result = await db.execute(select(Device).filter(Device.id == device_id))
+    device = result.scalar_one_or_none()
+    
+    if not device:
+        raise UnauthorizedException("El dispositivo rastreador no está registrado.")
+        
+    if not device.is_active or device.device_type != DeviceType.CHILD_TRACKER or not device.child_id:
+        raise UnauthorizedException("El dispositivo rastreador no está activo o no está vinculado a un niño.")
+        
+    token_hash = hashlib.sha256(token.encode("utf-8")).hexdigest()
+    if device.tracking_token_hash != token_hash:
+        raise UnauthorizedException("El token de rastreo ha sido revocado o desvinculado.")
+        
+    return device
+
+@router.websocket("/ws/tracking/location")
+async def new_child_tracking_websocket(
+    websocket: WebSocket,
+    token: str | None = Query(default=None)
+):
+    """
+    WebSocket recomendado por el cual los rastreadores envían su telemetría usando su token.
+    Resuelve niño y guardería automáticamente sin child_code en la URL.
+    """
+    query_params = websocket.query_params
+    token_str = token or query_params.get("token")
+    
+    async with async_session_maker() as db:
+        try:
+            device = await get_tracking_device_for_ws(token_str, db)
+            child = await ChildRepository.get_by_id(db, device.child_id)
+            if not child:
+                await websocket.close(code=4004, reason="Niño no encontrado.")
+                return
+            child_code = child.code
+        except Exception as auth_err:
+            logger.warning(f"Intento de conexión a WS de rastreador sin autorización: {auth_err}")
+            await websocket.close(code=4001, reason="No autorizado.")
+            return
+
+    await manager.connect_tracker(child_code, websocket)
+    try:
+        while True:
+            data = await websocket.receive_json()
+            
+            async with async_session_maker() as db:
+                try:
+                    # Validar nuevamente que el dispositivo siga activo/emparejado
+                    device = await get_tracking_device_for_ws(token_str, db)
+                    
+                    loc_input = LocationInput(
+                        latitude=data["latitude"],
+                        longitude=data["longitude"],
+                        accuracy=data.get("accuracy"),
+                        speed=data.get("speed"),
+                        heading=data.get("heading"),
+                        received_at=parse_iso_datetime(data["received_at"])
+                    )
+
+                    await LocationService.process_location_from_device(
+                        db=db,
+                        device=device,
+                        loc_in=loc_input
+                    )
+                    await db.commit()
+                except Exception as ex:
+                    logger.error(f"Error procesando lectura de tracker para dispositivo {device.id}: {ex}")
+                    
+    except WebSocketDisconnect:
+        logger.info(f"Dispositivo del niño {child_code} se desconectó.")
+    except Exception as e:
+        logger.error(f"Error de conexión en WebSocket de rastreador {child_code}: {e}")
+    finally:
+        manager.disconnect_tracker(child_code)
+
+
 @router.websocket("/ws/tracking/children/{child_code}/location")
 async def child_tracking_websocket(
     websocket: WebSocket,
     child_code: str,
     token: str | None = Query(default=None)
 ):
+    """
+    [LEGACY/TESTING ONLY] WebSocket de rastreo antiguo.
+    """
+    logger.warning(f"Llamada a endpoint legado /ws/tracking/children/{child_code}/location para niño {child_code}.")
     """
     WebSocket por el cual los rastreadores GPS del niño transmiten la telemetría periódicamente.
     Valida token con rol TRACKING_DEVICE o ADMIN.

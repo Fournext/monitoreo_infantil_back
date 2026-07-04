@@ -8,3 +8,4 @@ from app.modules.children.models import Child
 from app.modules.devices.models import Device
 from app.modules.locations.models import ChildLocation, CurrentChildLocation
 from app.modules.alerts.models import Alert, AlertNotificationLog
+from app.modules.tracking_devices.models import TrackerPairingCode

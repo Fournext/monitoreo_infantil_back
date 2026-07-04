@@ -19,6 +19,12 @@ class ChildStatus(str, Enum):
     ACTIVE = "ACTIVE"
     INACTIVE = "INACTIVE"
 
+class PairingCodeStatus(str, Enum):
+    ACTIVE = "ACTIVE"
+    USED = "USED"
+    EXPIRED = "EXPIRED"
+    CANCELLED = "CANCELLED"
+
 class DeviceType(str, Enum):
     GUARDIAN_PHONE = "GUARDIAN_PHONE"
     CHILD_TRACKER = "CHILD_TRACKER"

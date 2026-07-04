@@ -26,6 +26,11 @@ class Device(Base):
     platform: Mapped[str | None] = mapped_column(String(50), nullable=True)  # android, ios, custom_tracker
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     
+    code: Mapped[str | None] = mapped_column(String(50), unique=True, index=True, nullable=True)
+    tracking_token_hash: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    last_seen_at: Mapped[datetime | None] = mapped_column(nullable=True)
+    paired_at: Mapped[datetime | None] = mapped_column(nullable=True)
+    
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(server_default=func.now(), onupdate=func.now())
 

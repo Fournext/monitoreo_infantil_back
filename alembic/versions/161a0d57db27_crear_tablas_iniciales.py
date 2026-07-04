@@ -1,8 +1,8 @@
 """crear tablas iniciales
 
-Revision ID: cdc01f52dad2
+Revision ID: 161a0d57db27
 Revises: 
-Create Date: 2026-06-24 00:47:18.071404
+Create Date: 2026-06-24 19:16:42.158975
 
 """
 from typing import Sequence, Union
@@ -13,7 +13,7 @@ import geoalchemy2
 
 
 # revision identifiers, used by Alembic.
-revision: str = 'cdc01f52dad2'
+revision: str = '161a0d57db27'
 down_revision: Union[str, Sequence[str], None] = None
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
@@ -62,14 +62,21 @@ def upgrade() -> None:
     op.create_index(op.f('ix_daycares_code'), 'daycares', ['code'], unique=True)
     op.create_table('guardians',
     sa.Column('id', sa.Uuid(), nullable=False),
+    sa.Column('code', sa.String(length=50), nullable=False),
     sa.Column('full_name', sa.String(length=100), nullable=False),
     sa.Column('phone', sa.String(length=20), nullable=True),
     sa.Column('email', sa.String(length=100), nullable=True),
-    sa.Column('status', sa.Enum('ACTIVE', 'INACTIVE', name='guardianstatus'), nullable=False),
+    sa.Column('pin_hash', sa.String(length=255), nullable=False),
+    sa.Column('must_change_pin', sa.Boolean(), nullable=False),
+    sa.Column('status', sa.Enum('ACTIVE', 'INACTIVE', 'BLOCKED', name='guardianstatus'), nullable=False),
+    sa.Column('last_login_at', sa.DateTime(), nullable=True),
+    sa.Column('failed_login_attempts', sa.Integer(), nullable=False),
+    sa.Column('locked_until', sa.DateTime(), nullable=True),
     sa.Column('created_at', sa.DateTime(), server_default=sa.text('now()'), nullable=False),
     sa.Column('updated_at', sa.DateTime(), server_default=sa.text('now()'), nullable=False),
     sa.PrimaryKeyConstraint('id')
     )
+    op.create_index(op.f('ix_guardians_code'), 'guardians', ['code'], unique=True)
     op.create_index(op.f('ix_guardians_email'), 'guardians', ['email'], unique=True)
     op.create_table('children',
     sa.Column('id', sa.Uuid(), nullable=False),
@@ -98,7 +105,7 @@ def upgrade() -> None:
     sa.Column('username', sa.String(length=50), nullable=False),
     sa.Column('email', sa.String(length=100), nullable=False),
     sa.Column('hashed_password', sa.String(length=255), nullable=False),
-    sa.Column('role', sa.Enum('ADMIN', 'GUARDIAN', 'TRACKING_DEVICE', name='userrole'), nullable=False),
+    sa.Column('role', sa.Enum('ADMIN', 'DAYCARE_MANAGER', 'GUARDIAN', 'TRACKING_DEVICE', name='userrole'), nullable=False),
     sa.Column('guardian_id', sa.Uuid(), nullable=True),
     sa.Column('created_at', sa.DateTime(), server_default=sa.text('now()'), nullable=False),
     sa.Column('updated_at', sa.DateTime(), server_default=sa.text('now()'), nullable=False),
@@ -237,6 +244,7 @@ def downgrade() -> None:
     op.drop_index(op.f('ix_children_code'), table_name='children')
     op.drop_table('children')
     op.drop_index(op.f('ix_guardians_email'), table_name='guardians')
+    op.drop_index(op.f('ix_guardians_code'), table_name='guardians')
     op.drop_table('guardians')
     op.drop_index(op.f('ix_daycares_code'), table_name='daycares')
     op.drop_table('daycares')

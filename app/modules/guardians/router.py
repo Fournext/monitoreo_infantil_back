@@ -118,6 +118,7 @@ async def list_my_children(
             GuardianChildResponse(
                 child_code=c.code,
                 child_name=c.full_name,
+                child_age=c.age,
                 daycare_code=c.daycare_code,
                 daycare_name=c.daycare_name,
                 monitoring_status=monitoring_status,

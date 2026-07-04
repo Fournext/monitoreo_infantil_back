@@ -114,7 +114,7 @@ class GuardianRepository:
             .filter(GuardianChild.guardian_id == guardian_id)
         )
         result = await db.execute(query)
-        return list(result.scalars().all())
+        return list(result.unique().scalars().all())
 
     @staticmethod
     async def get_guardians_by_child(db: AsyncSession, child_id: uuid.UUID) -> list[Guardian]:

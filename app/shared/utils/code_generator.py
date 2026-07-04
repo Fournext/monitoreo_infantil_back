@@ -24,3 +24,14 @@ def generate_alert_code(next_num: int) -> str:
 def generate_device_code(next_num: int) -> str:
     """Genera un código correlativo para dispositivos en formato DEV-XXXX."""
     return f"DEV-{next_num:04d}"
+
+def generate_pairing_code(
+    prefix: str = "PAIR",
+    length1: int = 4,
+    length2: int = 3,
+    chars: str = "2346789ACDEFGHJKLMNPRTUVWXY"
+) -> str:
+    """Genera un código de emparejamiento aleatorio legible, p. ej. PAIR-X7K2-91A."""
+    part1 = "".join(random.choices(chars, k=length1))
+    part2 = "".join(random.choices(chars, k=length2))
+    return f"{prefix}-{part1}-{part2}"
