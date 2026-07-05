@@ -6,11 +6,11 @@ from app.core.constants import UserRole
 class UserBase(BaseModel):
     username: str = Field(..., min_length=3, max_length=50)
     email: EmailStr
-    role: UserRole = UserRole.GUARDIAN
+    role: UserRole = UserRole.MONITOR
+    daycare_id: uuid.UUID | None = None
 
 class UserCreate(UserBase):
     password: str = Field(..., min_length=6)
-    guardian_id: uuid.UUID | None = None
 
 class UserLogin(BaseModel):
     username_or_email: str
@@ -18,7 +18,6 @@ class UserLogin(BaseModel):
 
 class UserResponse(UserBase):
     id: uuid.UUID
-    guardian_id: uuid.UUID | None
     created_at: datetime
 
     class Config:

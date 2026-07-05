@@ -27,7 +27,7 @@ class ChildLocation(Base):
     is_inside_area: Mapped[bool] = mapped_column(Boolean)
     
     received_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
-    created_at: Mapped[datetime] = mapped_column(server_default=func.now())
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     # Relaciones
     child = relationship("Child", back_populates="locations")
@@ -56,7 +56,7 @@ class CurrentChildLocation(Base):
     is_inside_area: Mapped[bool] = mapped_column(Boolean)
     
     received_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
-    updated_at: Mapped[datetime] = mapped_column(server_default=func.now(), onupdate=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
     # Relaciones
     child = relationship("Child", back_populates="current_location")

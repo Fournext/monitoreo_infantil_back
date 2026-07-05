@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime
-from sqlalchemy import String, Enum, ForeignKey, Uuid
+from sqlalchemy import String, Enum, ForeignKey, Uuid, DateTime, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship as orm_relationship
 from sqlalchemy.sql import func
 from app.db.base import Base
@@ -17,15 +17,14 @@ class Guardian(Base):
     pin_hash: Mapped[str] = mapped_column(String(255))
     must_change_pin: Mapped[bool] = mapped_column(default=True)
     status: Mapped[GuardianStatus] = mapped_column(Enum(GuardianStatus), default=GuardianStatus.ACTIVE)
-    last_login_at: Mapped[datetime | None] = mapped_column(nullable=True)
+    last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     failed_login_attempts: Mapped[int] = mapped_column(default=0)
-    locked_until: Mapped[datetime | None] = mapped_column(nullable=True)
+    locked_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     
-    created_at: Mapped[datetime] = mapped_column(server_default=func.now())
-    updated_at: Mapped[datetime] = mapped_column(server_default=func.now(), onupdate=func.now())
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
     # Relaciones
-    user = orm_relationship("User", back_populates="guardian", uselist=False, cascade="all, delete-orphan")
     child_links = orm_relationship("GuardianChild", back_populates="guardian", cascade="all, delete-orphan")
     daycare_links = orm_relationship("GuardianDaycare", back_populates="guardian", cascade="all, delete-orphan")
     devices = orm_relationship("Device", back_populates="guardian")
@@ -33,13 +32,14 @@ class Guardian(Base):
 
 class GuardianChild(Base):
     __tablename__ = "guardian_children"
+    __table_args__ = (UniqueConstraint("guardian_id", "child_id", name="uq_guardian_child"),)
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
     guardian_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("guardians.id", ondelete="CASCADE"))
     child_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("children.id", ondelete="CASCADE"))
     relationship: Mapped[str] = mapped_column(String(50))  # MADRE, PADRE, TUTOR
     
-    created_at: Mapped[datetime] = mapped_column(server_default=func.now())
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     # Relaciones
     guardian = orm_relationship("Guardian", back_populates="child_links")
@@ -48,12 +48,13 @@ class GuardianChild(Base):
 
 class GuardianDaycare(Base):
     __tablename__ = "guardian_daycares"
+    __table_args__ = (UniqueConstraint("guardian_id", "daycare_id", name="uq_guardian_daycare"),)
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
     guardian_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("guardians.id", ondelete="CASCADE"))
     daycare_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("daycares.id", ondelete="CASCADE"))
     
-    created_at: Mapped[datetime] = mapped_column(server_default=func.now())
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     # Relaciones
     guardian = orm_relationship("Guardian", back_populates="daycare_links")

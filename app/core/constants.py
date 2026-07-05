@@ -3,8 +3,8 @@ from enum import Enum
 class UserRole(str, Enum):
     ADMIN = "ADMIN"
     DAYCARE_MANAGER = "DAYCARE_MANAGER"
-    GUARDIAN = "GUARDIAN"
-    TRACKING_DEVICE = "TRACKING_DEVICE"
+    OPERATOR = "OPERATOR"
+    MONITOR = "MONITOR"
 
 class DaycareStatus(str, Enum):
     ACTIVE = "ACTIVE"

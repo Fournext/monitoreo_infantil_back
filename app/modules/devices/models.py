@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime
-from sqlalchemy import String, Enum, ForeignKey, Boolean, Uuid
+from sqlalchemy import String, Enum, ForeignKey, Boolean, Uuid, DateTime
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
 from app.db.base import Base
@@ -28,11 +28,11 @@ class Device(Base):
     
     code: Mapped[str | None] = mapped_column(String(50), unique=True, index=True, nullable=True)
     tracking_token_hash: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    last_seen_at: Mapped[datetime | None] = mapped_column(nullable=True)
-    paired_at: Mapped[datetime | None] = mapped_column(nullable=True)
+    last_seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    paired_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     
-    created_at: Mapped[datetime] = mapped_column(server_default=func.now())
-    updated_at: Mapped[datetime] = mapped_column(server_default=func.now(), onupdate=func.now())
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
     # Relaciones
     guardian = relationship("Guardian", back_populates="devices")

@@ -23,18 +23,7 @@ async def check_daycare_manager_permission(db: AsyncSession, current_user: User,
     Verifica que si el usuario es un DAYCARE_MANAGER, pertenezca a la guardería indicada.
     """
     if current_user.role == UserRole.DAYCARE_MANAGER:
-        if not current_user.guardian_id:
-            raise ForbiddenException("El gestor no está asociado a ningún perfil de tutor.")
-        from app.modules.guardians.models import GuardianDaycare
-        res = await db.execute(
-            select(GuardianDaycare).filter(
-                and_(
-                    GuardianDaycare.guardian_id == current_user.guardian_id,
-                    GuardianDaycare.daycare_id == daycare_id
-                )
-            )
-        )
-        if not res.scalar_one_or_none():
+        if current_user.daycare_id != daycare_id:
             raise ForbiddenException("No tienes permisos para realizar operaciones sobre la guardería del niño.")
 
 @router.post("/pairing-codes", response_model=PairingCodeResponse, status_code=status.HTTP_200_OK)

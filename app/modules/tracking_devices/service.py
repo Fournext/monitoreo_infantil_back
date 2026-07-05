@@ -217,7 +217,7 @@ class TrackingDeviceService:
         access_token = create_access_token(
             data={
                 "sub": str(device.id),
-                "role": UserRole.TRACKING_DEVICE.value,
+                "role": "TRACKING_DEVICE",
                 "device_code": device.code,
                 "child_id": str(child.id)
             },

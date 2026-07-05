@@ -37,13 +37,13 @@ async def get_current_user(
     except ValueError:
         raise UnauthorizedException("El identificador en el token es inválido.")
         
-    if role == UserRole.GUARDIAN:
+    if role == "GUARDIAN":
         from app.modules.guardians.repository import GuardianRepository
         guardian = await GuardianRepository.get_by_id(db, entity_id)
         if not guardian:
             raise UnauthorizedException("El tutor asociado al token ya no existe.")
         # Dynamically set role attribute on Guardian object
-        guardian.role = UserRole.GUARDIAN
+        guardian.role = "GUARDIAN"
         return guardian
     else:
         from app.modules.auth.repository import UserRepository
@@ -88,7 +88,7 @@ async def require_tracking_device(
     """
     Requires the current authenticated user to be a TRACKING_DEVICE.
     """
-    if isinstance(current_user, Guardian) or current_user.role != UserRole.TRACKING_DEVICE:
+    if isinstance(current_user, Guardian) or current_user.role != "TRACKING_DEVICE":
         raise ForbiddenException("No tienes permisos suficientes para realizar esta acción (TRACKING_DEVICE).")
     return current_user
 
@@ -101,7 +101,7 @@ async def get_current_tracking_device(
     """
     import hashlib
     from app.modules.devices.models import Device
-    from app.core.constants import DeviceType, UserRole
+    from app.core.constants import DeviceType
     
     if not token:
         raise UnauthorizedException("Falta el token de autenticación del dispositivo.")
@@ -114,7 +114,7 @@ async def get_current_tracking_device(
     device_id_str = payload.get("sub")
     child_id_str = payload.get("child_id")
     
-    if role != UserRole.TRACKING_DEVICE.value or not device_id_str or not child_id_str:
+    if role != "TRACKING_DEVICE" or not device_id_str or not child_id_str:
         raise ForbiddenException("Token inválido para un dispositivo rastreador.")
         
     try:

@@ -26,7 +26,7 @@ async def create_child(
 async def get_child(
     child_code: str,
     db: AsyncSession = Depends(get_db),
-    current_user: Any = Depends(require_roles(UserRole.ADMIN, UserRole.GUARDIAN))
+    current_user: Any = Depends(require_roles(UserRole.ADMIN, "GUARDIAN"))
 ):
     """
     Retorna el detalle básico del niño según su código (e.g. NIN-8F42K). (Acceso: ADMIN, GUARDIAN)

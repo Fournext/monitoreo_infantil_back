@@ -1,3 +1,4 @@
+from typing import Any
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
@@ -13,17 +14,21 @@ router = APIRouter(prefix="/api/alerts", tags=["Alertas de Seguridad"])
 async def mark_alert_as_viewed(
     alert_code: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.GUARDIAN))
+    current_user: Any = Depends(require_roles(UserRole.ADMIN, "GUARDIAN"))
 ):
     """
     Marca una alerta como vista por el tutor o administrador. (Acceso: ADMIN, GUARDIAN vinculado)
     """
-    is_admin = current_user.role == UserRole.ADMIN
+    from app.modules.guardians.models import Guardian
+    is_guardian = isinstance(current_user, Guardian)
+    is_admin = getattr(current_user, "role", None) == UserRole.ADMIN
+    guardian_id = current_user.id if is_guardian else None
+    
     alert = await AlertService.update_status_by_code(
         db=db,
         code=alert_code,
         new_status=AlertStatus.VIEWED,
-        guardian_id=current_user.guardian_id,
+        guardian_id=guardian_id,
         is_admin=is_admin
     )
     await db.commit()
@@ -33,17 +38,21 @@ async def mark_alert_as_viewed(
 async def resolve_alert(
     alert_code: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.GUARDIAN))
+    current_user: Any = Depends(require_roles(UserRole.ADMIN, "GUARDIAN"))
 ):
     """
     Resuelve y cierra una alerta de seguridad activa. (Acceso: ADMIN, GUARDIAN vinculado)
     """
-    is_admin = current_user.role == UserRole.ADMIN
+    from app.modules.guardians.models import Guardian
+    is_guardian = isinstance(current_user, Guardian)
+    is_admin = getattr(current_user, "role", None) == UserRole.ADMIN
+    guardian_id = current_user.id if is_guardian else None
+    
     alert = await AlertService.update_status_by_code(
         db=db,
         code=alert_code,
         new_status=AlertStatus.RESOLVED,
-        guardian_id=current_user.guardian_id,
+        guardian_id=guardian_id,
         is_admin=is_admin
     )
     await db.commit()

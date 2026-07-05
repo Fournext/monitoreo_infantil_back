@@ -13,21 +13,25 @@ from app.modules.locations.schemas import LocationResponse
 
 router = APIRouter(prefix="/api/children", tags=["Ubicaciones de Niños"])
 
-async def verify_guardian_child_access(db: AsyncSession, child_code: str, current_user: User):
+async def verify_guardian_child_access(db: AsyncSession, child_code: str, current_user: Any):
     """
     Valida que el usuario tenga acceso al niño:
     - Si es ADMIN, tiene acceso total.
     - Si es GUARDIAN, debe tener una vinculación activa en guardian_children con el niño.
     """
+    from app.modules.guardians.models import Guardian
     child = await ChildRepository.get_by_code(db, child_code)
     if not child:
         raise NotFoundException(f"Niño con código '{child_code}' no encontrado.")
         
-    if current_user.role != UserRole.ADMIN:
-        if not current_user.guardian_id:
-            raise ForbiddenException("El usuario no tiene un perfil de tutor asociado.")
+    is_admin = getattr(current_user, "role", None) == UserRole.ADMIN
+    if not is_admin:
+        if isinstance(current_user, Guardian):
+            guardian_id = current_user.id
+        else:
+            raise ForbiddenException("No tienes permisos suficientes.")
             
-        link = await GuardianRepository.get_child_link(db, current_user.guardian_id, child.id)
+        link = await GuardianRepository.get_child_link(db, guardian_id, child.id)
         if not link:
             raise ForbiddenException("No tienes permisos para ver información de ubicación de este niño.")
             
@@ -37,7 +41,7 @@ async def verify_guardian_child_access(db: AsyncSession, child_code: str, curren
 async def get_last_location(
     child_code: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.GUARDIAN))
+    current_user: User = Depends(require_roles(UserRole.ADMIN, "GUARDIAN"))
 ):
     """
     Retorna la última ubicación física conocida del niño. (Acceso: ADMIN o GUARDIAN vinculado)
@@ -54,7 +58,7 @@ async def get_recent_locations(
     child_code: str,
     limit: int = Query(default=20, ge=1, le=100),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.GUARDIAN))
+    current_user: User = Depends(require_roles(UserRole.ADMIN, "GUARDIAN"))
 ):
     """
     Retorna el historial de ubicaciones recientes del niño. (Acceso: ADMIN o GUARDIAN vinculado)

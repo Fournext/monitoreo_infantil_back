@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 from typing import Any
-from sqlalchemy import String, Enum, Uuid
+from sqlalchemy import String, Enum, Uuid, DateTime
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
 from geoalchemy2 import Geometry
@@ -23,9 +23,10 @@ class Daycare(Base):
         nullable=True
     )
     
-    created_at: Mapped[datetime] = mapped_column(server_default=func.now())
-    updated_at: Mapped[datetime] = mapped_column(server_default=func.now(), onupdate=func.now())
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
     # Relaciones
     children = relationship("Child", back_populates="daycare", cascade="all, delete-orphan")
     guardian_links = relationship("GuardianDaycare", back_populates="daycare", cascade="all, delete-orphan")
+    users = relationship("User", back_populates="daycare")

@@ -23,7 +23,7 @@ async def get_tracking_device_for_ws(token: str | None, db: AsyncSession) -> Any
     import hashlib
     from sqlalchemy import select
     from app.modules.devices.models import Device
-    from app.core.constants import DeviceType, UserRole
+    from app.core.constants import DeviceType
     from app.core.security import decode_access_token
     from app.core.exceptions import UnauthorizedException, ForbiddenException
     
@@ -37,7 +37,7 @@ async def get_tracking_device_for_ws(token: str | None, db: AsyncSession) -> Any
     role = payload.get("role")
     device_id_str = payload.get("sub")
     
-    if role != UserRole.TRACKING_DEVICE.value or not device_id_str:
+    if role != "TRACKING_DEVICE" or not device_id_str:
         raise ForbiddenException("Token inválido para un dispositivo rastreador.")
         
     try:
@@ -140,17 +140,24 @@ async def child_tracking_websocket(
     
     async with async_session_maker() as db:
         try:
-            # 1. Autenticación del rastreador
+            # 1. Autenticación del cliente (puede ser un tracker o un administrador)
+            user = None
+            is_tracker = False
             try:
-                user = await UserService.get_current_user_ws(token_str, db)
-            except Exception as auth_err:
-                logger.warning(f"Intento de conexión a WS de rastreador sin autorización para {child_code}: {auth_err}")
-                await websocket.close(code=4001, reason="No autorizado: Token inválido.")
-                return
-                
-            if user.role not in (UserRole.TRACKING_DEVICE, UserRole.ADMIN):
-                await websocket.close(code=4003, reason="Prohibido: Rol no autorizado para rastreo.")
-                return
+                device = await get_tracking_device_for_ws(token_str, db)
+                is_tracker = True
+            except Exception:
+                try:
+                    user = await UserService.get_current_user_ws(token_str, db)
+                except Exception as auth_err:
+                    logger.warning(f"Intento de conexión a WS de rastreador sin autorización para {child_code}: {auth_err}")
+                    await websocket.close(code=4001, reason="No autorizado: Token inválido.")
+                    return
+            
+            if not is_tracker:
+                if getattr(user, "role", None) != UserRole.ADMIN:
+                    await websocket.close(code=4003, reason="Prohibido: Rol no autorizado para rastreo.")
+                    return
 
             # 2. Validar existencia del niño
             child = await ChildRepository.get_by_code(db, child_code)

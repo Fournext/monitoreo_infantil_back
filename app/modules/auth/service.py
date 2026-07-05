@@ -1,5 +1,5 @@
 import uuid
-from typing import Annotated
+from typing import Annotated, Any
 from fastapi import Depends
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -85,12 +85,12 @@ class UserService:
         except ValueError:
             raise UnauthorizedException("Identificador inválido.")
             
-        if role == UserRole.GUARDIAN:
+        if role == "GUARDIAN":
             from app.modules.guardians.repository import GuardianRepository
             guardian = await GuardianRepository.get_by_id(db, entity_id)
             if not guardian:
                 raise UnauthorizedException("El tutor asociado al token no existe.")
-            guardian.role = UserRole.GUARDIAN
+            guardian.role = "GUARDIAN"
             return guardian
         else:
             user = await UserRepository.get_by_id(db, entity_id)
@@ -172,10 +172,16 @@ class UserService:
         await db.flush()
 
 
-def require_roles(*allowed_roles: UserRole):
+def require_roles(*allowed_roles: Any):
     """Generador de dependencias para restringir accesos según roles."""
-    async def role_checker(current_user: Annotated[User, Depends(UserService.get_current_user)]):
-        if current_user.role not in allowed_roles:
+    from app.modules.auth.dependencies import get_current_user
+    
+    async def role_checker(current_user: Annotated[Any, Depends(get_current_user)]):
+        from app.modules.guardians.models import Guardian
+        from app.core.exceptions import ForbiddenException
+        
+        role = "GUARDIAN" if isinstance(current_user, Guardian) else current_user.role
+        if role not in allowed_roles:
             raise ForbiddenException("No tienes permisos suficientes para realizar esta acción.")
         return current_user
     return role_checker

@@ -40,7 +40,7 @@ async def guardian_login(login_data: GuardianLoginRequest, db: AsyncSession = De
     guardian = await UserService.authenticate_guardian(db, login_data)
     access_token = create_access_token(data={
         "sub": str(guardian.id),
-        "role": UserRole.GUARDIAN,
+        "role": "GUARDIAN",
         "code": guardian.code
     })
     await db.commit()

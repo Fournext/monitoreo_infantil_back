@@ -18,8 +18,8 @@ def generate_guardian_code() -> str:
     return f"TUT-{_generate_random_alphanumeric(5)}"
 
 def generate_alert_code(next_num: int) -> str:
-    """Genera un código correlativo para alertas en formato ALT-XXXX."""
-    return f"ALT-{next_num:04d}"
+    """Genera un código correlativo para alertas en formato ALT-XXXXX."""
+    return f"ALT-{next_num:05d}"
 
 def generate_device_code(next_num: int) -> str:
     """Genera un código correlativo para dispositivos en formato DEV-XXXX."""

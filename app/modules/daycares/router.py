@@ -42,7 +42,7 @@ async def update_daycare_area(
 @router.get("", response_model=list[DaycareResponse])
 async def list_daycares(
     db: AsyncSession = Depends(get_db),
-    current_user: Any = Depends(require_roles(UserRole.ADMIN, UserRole.GUARDIAN))
+    current_user: Any = Depends(require_roles(UserRole.ADMIN, "GUARDIAN"))
 ):
     """
     Lista todas las guarderías del sistema. (Acceso: ADMIN, GUARDIAN)
@@ -53,7 +53,7 @@ async def list_daycares(
 async def get_daycare(
     daycare_code: str,
     db: AsyncSession = Depends(get_db),
-    current_user: Any = Depends(require_roles(UserRole.ADMIN, UserRole.GUARDIAN))
+    current_user: Any = Depends(require_roles(UserRole.ADMIN, "GUARDIAN"))
 ):
     """
     Retorna el detalle completo de una guardería según su código correlativo. (Acceso: ADMIN, GUARDIAN)
