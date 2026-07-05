@@ -15,6 +15,7 @@ from app.utils.date_utils import get_now
 def mock_db():
     db = MagicMock()
     db.execute = AsyncMock()
+    db.execute.return_value = MagicMock()
     db.commit = AsyncMock()
     db.rollback = AsyncMock()
     db.flush = AsyncMock()
@@ -128,6 +129,7 @@ async def test_pair_device_success_new_device(
 
     # Mock DB insert count
     mock_db.execute.return_value.scalar.return_value = 0
+    mock_db.execute.return_value.scalar_one_or_none.return_value = None
 
     response = await TrackingDeviceService.pair_device(
         db=mock_db,

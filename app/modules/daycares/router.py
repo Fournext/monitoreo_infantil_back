@@ -1,11 +1,13 @@
 from typing import Any
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, status, Body
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 from app.modules.daycares.schemas import DaycareCreate, DaycareResponse
 from app.modules.daycares.service import DaycareService
 from app.modules.auth.service import require_roles
 from app.core.constants import UserRole
+
+from app.shared.geo.schemas import GeoJSONPolygon
 
 router = APIRouter(prefix="/api/daycares", tags=["Guarderías"])
 
@@ -27,7 +29,7 @@ async def create_daycare(
 @router.put("/{daycare_code}/area", response_model=DaycareResponse)
 async def update_daycare_area(
     daycare_code: str,
-    geojson_area: dict[str, Any],
+    geojson_area: GeoJSONPolygon,
     db: AsyncSession = Depends(get_db),
     current_user: Any = Depends(require_roles(UserRole.ADMIN))
 ):
@@ -35,9 +37,10 @@ async def update_daycare_area(
     Establece o actualiza el polígono geográfico de cobertura para la guardería. (Acceso: ADMIN)
     Espera un GeoJSON de tipo Polygon válido.
     """
-    daycare = await DaycareService.update_daycare_area(db, daycare_code, geojson_area)
+    daycare = await DaycareService.update_daycare_area(db, daycare_code, geojson_area.model_dump())
     await db.commit()
     return daycare
+
 
 @router.get("", response_model=list[DaycareResponse])
 async def list_daycares(
