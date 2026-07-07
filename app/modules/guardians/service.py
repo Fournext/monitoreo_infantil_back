@@ -2,16 +2,17 @@ import uuid
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.exceptions import NotFoundException, ConflictException, BadRequestException, ForbiddenException
 from app.core.constants import AlertStatus, AlertType
-from app.modules.guardians.repository import GuardianRepository
-from app.modules.daycares.repository import DaycareRepository
-from app.modules.children.repository import ChildRepository
 from app.modules.guardians.schemas import (
     GuardianCreate, GuardianResponse, LinkedDaycareResponse,
     LinkedChildResponse, LocationSchema, MonitoringSummaryResponse, MonitoringChildSummary,
     GuardianCreateRequest, GuardianCreateResponse, GuardianResetPinResponse,
     GuardianChildLinkRequest, GuardianDaycareResponse, GuardianChildResponse,
-    GuardianMonitoringSummaryResponse
+    GuardianMonitoringSummaryResponse, GuardianAdminResponse, GuardianAdminChild,
+    GuardianAdminDaycare
 )
+from app.modules.guardians.repository import GuardianRepository
+from app.modules.daycares.repository import DaycareRepository
+from app.modules.children.repository import ChildRepository
 
 class GuardianService:
     @staticmethod
@@ -232,3 +233,46 @@ class GuardianService:
             active_alerts=active_alerts_count,
             children=children_summaries
         )
+
+    @classmethod
+    async def list_all_guardians(cls, db: AsyncSession) -> list[GuardianAdminResponse]:
+        """Obtiene la lista de todos los tutores para el panel de administración."""
+        guardians = await GuardianRepository.get_all(db)
+        response = []
+        for g in guardians:
+            children_dtos = [
+                GuardianAdminChild(
+                    child_code=link.child.code,
+                    child_name=link.child.full_name,
+                    relationship=link.relationship
+                )
+                for link in g.child_links
+            ]
+            daycare_dtos = [
+                GuardianAdminDaycare(
+                    daycare_code=link.daycare.code,
+                    daycare_name=link.daycare.name
+                )
+                for link in g.daycare_links
+            ]
+            response.append(
+                GuardianAdminResponse(
+                    id=g.id,
+                    code=g.code,
+                    full_name=g.full_name,
+                    phone=g.phone,
+                    email=g.email,
+                    status=g.status,
+                    children=children_dtos,
+                    daycares=daycare_dtos
+                )
+            )
+        return response
+
+    @classmethod
+    async def link_daycare_by_guardian_code(cls, db: AsyncSession, guardian_code: str, daycare_code: str) -> None:
+        """Vincula un tutor a una guardería usando el código del tutor."""
+        guardian = await GuardianRepository.get_by_code(db, guardian_code)
+        if not guardian:
+            raise NotFoundException(f"Tutor con código '{guardian_code}' no encontrado.")
+        await cls.link_daycare_by_code(db, guardian.id, daycare_code)

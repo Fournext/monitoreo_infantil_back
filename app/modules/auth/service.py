@@ -9,7 +9,7 @@ from app.core.exceptions import UnauthorizedException, ConflictException, Forbid
 from app.core.constants import UserRole
 from app.modules.auth.models import User
 from app.modules.auth.repository import UserRepository
-from app.modules.auth.schemas import UserCreate, UserLogin, GuardianLoginRequest, ChangePinRequest
+from app.modules.auth.schemas import UserCreate, UserLogin, GuardianLoginRequest, ChangePinRequest, UserUpdate
 from app.modules.guardians.models import Guardian
 
 # Define el esquema OAuth2 para resolver el header Authorization: Bearer <token>
@@ -170,6 +170,20 @@ class UserService:
         guardian.pin_hash = get_pin_hash(change_data.new_pin)
         guardian.must_change_pin = False
         await db.flush()
+
+    @classmethod
+    async def list_users(cls, db: AsyncSession) -> list[User]:
+        """Obtiene la lista de todos los usuarios registrados."""
+        return await UserRepository.get_all(db)
+
+    @classmethod
+    async def update_user(cls, db: AsyncSession, user_id: uuid.UUID, user_in: UserUpdate) -> User:
+        """Actualiza la información de un usuario."""
+        from app.core.exceptions import NotFoundException
+        user = await UserRepository.get_by_id(db, user_id)
+        if not user:
+            raise NotFoundException("Usuario no encontrado.")
+        return await UserRepository.update(db, user, user_in)
 
 
 def require_roles(*allowed_roles: Any):

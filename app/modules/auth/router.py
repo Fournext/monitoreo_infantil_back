@@ -6,9 +6,9 @@ from app.core.constants import UserRole
 from app.core.exceptions import BadRequestException
 from app.modules.auth.schemas import (
     UserCreate, UserLogin, UserResponse, TokenResponse,
-    GuardianLoginRequest, ChangePinRequest, CurrentUserResponse
+    GuardianLoginRequest, ChangePinRequest, CurrentUserResponse, UserUpdate
 )
-from app.modules.auth.service import UserService
+from app.modules.auth.service import UserService, require_roles
 from app.modules.auth.dependencies import get_current_user, get_current_guardian
 from app.modules.guardians.models import Guardian
 from app.modules.auth.models import User
@@ -134,3 +134,34 @@ async def get_me(current_user: User | Guardian = Depends(get_current_user)):
             role=current_user.role,
             must_change_pin=False
         )
+
+@router.get("/users", response_model=list[UserResponse])
+async def list_users(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_roles(UserRole.ADMIN))
+):
+    """
+    Retorna la lista de todos los usuarios web en la plataforma. (Acceso: ADMIN)
+    """
+    return await UserService.list_users(db)
+
+@router.put("/users/{user_id}", response_model=UserResponse)
+async def update_user(
+    user_id: str,
+    user_in: UserUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_roles(UserRole.ADMIN))
+):
+    """
+    Actualiza la información (correo, rol, guardería, password) de un usuario web. (Acceso: ADMIN)
+    """
+    import uuid
+    from app.core.exceptions import BadRequestException
+    try:
+        user_uuid = uuid.UUID(user_id)
+    except ValueError:
+        raise BadRequestException("Identificador de usuario inválido.")
+        
+    user = await UserService.update_user(db, user_uuid, user_in)
+    await db.commit()
+    return user

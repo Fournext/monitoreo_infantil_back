@@ -126,3 +126,17 @@ class GuardianRepository:
         )
         result = await db.execute(query)
         return list(result.scalars().all())
+
+    @staticmethod
+    async def get_all(db: AsyncSession) -> list[Guardian]:
+        """Obtiene todos los tutores con carga eficiente de sus relaciones."""
+        query = (
+            select(Guardian)
+            .options(
+                joinedload(Guardian.child_links).joinedload(GuardianChild.child),
+                joinedload(Guardian.daycare_links).joinedload(GuardianDaycare.daycare)
+            )
+            .order_by(Guardian.full_name)
+        )
+        result = await db.execute(query)
+        return list(result.unique().scalars().all())
