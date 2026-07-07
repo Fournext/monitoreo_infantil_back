@@ -218,6 +218,7 @@ class GuardianService:
                 MonitoringChildSummary(
                     child_code=child.code,
                     child_name=child.full_name,
+                    child_age=child.age,
                     daycare_code=daycare.code,
                     daycare_name=daycare.name,
                     monitoring_status=monitoring_status,
