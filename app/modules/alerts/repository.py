@@ -85,3 +85,42 @@ class AlertRepository:
         db.add(alert)
         await db.flush()
         return alert
+
+    @staticmethod
+    async def get_alerts_admin(
+        db: AsyncSession,
+        child_code: str | None = None,
+        daycare_code: str | None = None,
+        daycare_id: uuid.UUID | None = None,
+        status_filter: str | None = None
+    ) -> list[Alert]:
+        """
+        Retorna la lista de alertas para administradores y operadores con filtros opcionales.
+        Realiza eager loading de child y child.daycare para optimizar accesos.
+        """
+        from sqlalchemy.orm import joinedload
+        
+        query = (
+            select(Alert)
+            .join(Child, Child.id == Alert.child_id)
+            .options(
+                joinedload(Alert.child).joinedload(Child.daycare)
+            )
+        )
+
+        if child_code:
+            query = query.filter(Child.code == child_code)
+
+        if daycare_id:
+            query = query.filter(Alert.daycare_id == daycare_id)
+
+        if daycare_code:
+            query = query.join(Daycare, Daycare.id == Alert.daycare_id).filter(Daycare.code == daycare_code)
+
+        if status_filter:
+            query = query.filter(Alert.status == status_filter)
+
+        query = query.order_by(Alert.created_at.desc())
+        result = await db.execute(query)
+        return list(result.scalars().all())
+

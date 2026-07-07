@@ -5,9 +5,48 @@ from app.core.constants import AlertStatus
 from app.modules.alerts.models import Alert
 from app.modules.alerts.repository import AlertRepository
 from app.modules.guardians.repository import GuardianRepository
-from app.modules.alerts.schemas import AlertResponse
+from app.modules.alerts.schemas import AlertResponse, AdminAlertResponse
 
 class AlertService:
+    @staticmethod
+    async def get_alerts_admin(
+        db: AsyncSession,
+        child_code: str | None = None,
+        daycare_code: str | None = None,
+        daycare_id: uuid.UUID | None = None,
+        status_filter: str | None = None
+    ) -> list[AdminAlertResponse]:
+        """Obtiene y serializa la lista de alertas filtradas para administradores y operadores."""
+        alerts = await AlertRepository.get_alerts_admin(
+            db=db,
+            child_code=child_code,
+            daycare_code=daycare_code,
+            daycare_id=daycare_id,
+            status_filter=status_filter
+        )
+        return [
+            AdminAlertResponse(
+                id=a.id,
+                code=a.code,
+                child_id=a.child_id,
+                child_code=a.child.code,
+                child_name=a.child.full_name,
+                daycare_id=a.daycare_id,
+                daycare_code=a.child.daycare.code,
+                daycare_name=a.child.daycare.name,
+                location_id=a.location_id,
+                alert_type=a.alert_type,
+                severity=a.severity,
+                status=a.status,
+                title=a.title,
+                message=a.message,
+                created_at=a.created_at,
+                updated_at=a.updated_at,
+                resolved_at=a.resolved_at
+            )
+            for a in alerts
+        ]
+
     @staticmethod
     async def get_alerts_for_guardian(
         db: AsyncSession,
