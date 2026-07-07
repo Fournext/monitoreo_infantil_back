@@ -35,6 +35,26 @@ class Alert(Base):
     child = relationship("Child", back_populates="alerts")
     notification_logs = relationship("AlertNotificationLog", back_populates="alert", cascade="all, delete-orphan")
 
+    @property
+    def child_code(self) -> str:
+        return self.child.code if self.child else ""
+
+    @property
+    def child_name(self) -> str:
+        return self.child.full_name if self.child else ""
+
+    @property
+    def daycare_code(self) -> str:
+        if self.child and self.child.daycare:
+            return self.child.daycare.code
+        return ""
+
+    @property
+    def daycare_name(self) -> str:
+        if self.child and self.child.daycare:
+            return self.child.daycare.name
+        return ""
+
 
 class AlertNotificationLog(Base):
     __tablename__ = "alert_notification_logs"

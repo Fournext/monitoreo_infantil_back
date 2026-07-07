@@ -1,7 +1,7 @@
 import uuid
-from datetime import datetime
 from pydantic import BaseModel
 from app.core.constants import AlertType, AlertSeverity, AlertStatus
+from app.utils.date_utils import BoliviaDateTime
 
 class AlertResponse(BaseModel):
     id: uuid.UUID
@@ -14,9 +14,15 @@ class AlertResponse(BaseModel):
     status: AlertStatus
     title: str
     message: str
-    created_at: datetime
-    updated_at: datetime
-    resolved_at: datetime | None = None
+    created_at: BoliviaDateTime
+    updated_at: BoliviaDateTime
+    resolved_at: BoliviaDateTime | None = None
+    
+    # Campos adicionales para UI de notificaciones
+    child_code: str
+    child_name: str
+    daycare_code: str
+    daycare_name: str
 
     class Config:
         from_attributes = True

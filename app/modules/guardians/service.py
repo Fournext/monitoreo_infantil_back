@@ -2,6 +2,8 @@ import uuid
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.exceptions import NotFoundException, ConflictException, BadRequestException, ForbiddenException
 from app.core.constants import AlertStatus, AlertType
+from geoalchemy2.shape import to_shape
+from shapely.geometry import mapping
 from app.modules.guardians.schemas import (
     GuardianCreate, GuardianResponse, LinkedDaycareResponse,
     LinkedChildResponse, LocationSchema, MonitoringSummaryResponse, MonitoringChildSummary,
@@ -139,7 +141,28 @@ class GuardianService:
     async def list_linked_daycares(db: AsyncSession, guardian_id: uuid.UUID) -> list[LinkedDaycareResponse]:
         """Obtiene la lista de guarderías vinculadas al tutor."""
         daycares = await GuardianRepository.get_linked_daycares(db, guardian_id)
-        return [LinkedDaycareResponse.model_validate(d) for d in daycares]
+        
+        
+        
+        response_list = []
+        for d in daycares:
+            area_geojson = None
+            if d.area is not None:
+                try:
+                    area_geojson = mapping(to_shape(d.area))
+                except Exception:
+                    pass
+            response_list.append(
+                LinkedDaycareResponse(
+                    id=d.id,
+                    code=d.code,
+                    name=d.name,
+                    address=d.address,
+                    status=d.status.value if hasattr(d.status, "value") else str(d.status),
+                    area=area_geojson
+                )
+            )
+        return response_list
 
     @staticmethod
     async def list_linked_children(db: AsyncSession, guardian_id: uuid.UUID) -> list[LinkedChildResponse]:

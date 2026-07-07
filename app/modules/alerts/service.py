@@ -1,6 +1,6 @@
 import uuid
 from sqlalchemy.ext.asyncio import AsyncSession
-from app.core.exceptions import NotFoundException, ForbiddenException
+from app.core.exceptions import NotFoundException, ForbiddenException, BadRequestException
 from app.core.constants import AlertStatus
 from app.modules.alerts.models import Alert
 from app.modules.alerts.repository import AlertRepository
@@ -41,6 +41,10 @@ class AlertService:
         alert = await AlertRepository.get_by_code(db, code)
         if not alert:
             raise NotFoundException(f"Alerta con código '{code}' no encontrada.")
+
+        # Evitar transición de RESOLVED a VIEWED
+        if alert.status == AlertStatus.RESOLVED and new_status == AlertStatus.VIEWED:
+            raise BadRequestException("No se puede marcar como vista una alerta que ya ha sido resuelta.")
 
         # Validaciones de seguridad
         if not is_admin:

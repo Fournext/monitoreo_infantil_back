@@ -12,13 +12,38 @@ class AlertRepository:
     @staticmethod
     async def get_by_id(db: AsyncSession, alert_id: uuid.UUID) -> Alert | None:
         """Busca una alerta por su ID único primario."""
-        result = await db.execute(select(Alert).filter(Alert.id == alert_id))
+        from sqlalchemy.orm import selectinload
+        result = await db.execute(
+            select(Alert)
+            .options(selectinload(Alert.child).selectinload(Child.daycare))
+            .filter(Alert.id == alert_id)
+        )
         return result.scalar_one_or_none()
 
     @staticmethod
     async def get_by_code(db: AsyncSession, code: str) -> Alert | None:
-        """Busca una alerta por su código de negocio (e.g. ALT-98214)."""
-        result = await db.execute(select(Alert).filter(Alert.code == code))
+        """Busca una alerta por su código de negocio (e.g. ALT-98214) o por su ID único (UUID)."""
+        from sqlalchemy.orm import selectinload
+        # Intentar buscar por UUID si el formato coincide
+        try:
+            alert_uuid = uuid.UUID(code)
+            result = await db.execute(
+                select(Alert)
+                .options(selectinload(Alert.child).selectinload(Child.daycare))
+                .filter(Alert.id == alert_uuid)
+            )
+            alert = result.scalar_one_or_none()
+            if alert:
+                return alert
+        except ValueError:
+            pass
+
+        # Buscar por código de negocio como fallback
+        result = await db.execute(
+            select(Alert)
+            .options(selectinload(Alert.child).selectinload(Child.daycare))
+            .filter(Alert.code == code)
+        )
         return result.scalar_one_or_none()
 
     @staticmethod
@@ -30,16 +55,23 @@ class AlertRepository:
         """
         Verifica si ya existe una alerta activa (estado NEW o VIEWED) de un tipo específico
         asociada a un niño para evitar duplicados.
+        Retorna la alerta más reciente si existen múltiples para evitar lanzar
+        excepciones de tipo MultipleResultsFound.
         """
-        query = select(Alert).filter(
-            and_(
-                Alert.child_id == child_id,
-                Alert.alert_type == alert_type,
-                Alert.status.in_([AlertStatus.NEW, AlertStatus.VIEWED])
+        query = (
+            select(Alert)
+            .filter(
+                and_(
+                    Alert.child_id == child_id,
+                    Alert.alert_type == alert_type,
+                    Alert.status.in_([AlertStatus.NEW, AlertStatus.VIEWED])
+                )
             )
+            .order_by(Alert.created_at.desc())
+            .limit(1)
         )
         result = await db.execute(query)
-        return result.scalar_one_or_none()
+        return result.scalars().first()
 
     @staticmethod
     async def get_alerts_for_guardian(
@@ -53,12 +85,14 @@ class AlertRepository:
         Retorna la lista de alertas asociadas a los niños vinculados a un tutor determinado,
         aplicando filtros opcionales (child_code, daycare_code, status).
         """
+        from sqlalchemy.orm import selectinload
         # Consulta base uniendo con GuardianChild para garantizar seguridad de acceso
         query = (
             select(Alert)
             .join(Child, Child.id == Alert.child_id)
             .join(GuardianChild, GuardianChild.child_id == Child.id)
             .filter(GuardianChild.guardian_id == guardian_id)
+            .options(selectinload(Alert.child).selectinload(Child.daycare))
         )
 
         if child_code:
@@ -81,7 +115,9 @@ class AlertRepository:
         """
         alert.status = new_status
         if new_status == AlertStatus.RESOLVED:
-            alert.resolved_at = datetime.now(timezone.utc)
+            from app.utils.date_utils import get_now
+            alert.resolved_at = get_now()
         db.add(alert)
         await db.flush()
+        await db.refresh(alert)
         return alert

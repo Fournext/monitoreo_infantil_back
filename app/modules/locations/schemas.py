@@ -1,6 +1,7 @@
 import uuid
 from datetime import datetime
 from pydantic import BaseModel, Field
+from app.utils.date_utils import BoliviaDateTime
 
 class LocationInput(BaseModel):
     latitude: float = Field(..., ge=-90.0, le=90.0)
@@ -20,8 +21,8 @@ class LocationResponse(BaseModel):
     speed: float | None = None
     heading: float | None = None
     is_inside_area: bool
-    received_at: datetime
-    created_at: datetime
+    received_at: BoliviaDateTime | None = None
+    created_at: BoliviaDateTime | None = None
 
     class Config:
         from_attributes = True
@@ -36,4 +37,4 @@ class LiveLocationPayload(BaseModel):
     accuracy: float | None = None
     is_inside_area: bool
     monitoring_status: str  # INSIDE_AREA, OUTSIDE_AREA
-    received_at: datetime
+    received_at: BoliviaDateTime

@@ -3,6 +3,7 @@ from datetime import datetime
 from pydantic import BaseModel, Field
 from app.core.constants import DaycareStatus
 from app.shared.geo.schemas import GeoJSONPolygon
+from app.utils.date_utils import BoliviaDateTime
 
 class DaycareBase(BaseModel):
     name: str = Field(..., min_length=2, max_length=100)
@@ -22,8 +23,8 @@ class DaycareResponse(DaycareBase):
     status: DaycareStatus
     has_area: bool
     area: GeoJSONPolygon | None = None
-    created_at: datetime
-    updated_at: datetime
+    created_at: BoliviaDateTime
+    updated_at: BoliviaDateTime
 
     class Config:
         from_attributes = True

@@ -6,7 +6,7 @@ from app.modules.guardians.models import Guardian
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Query
 from app.core.database import async_session_maker
 from app.core.constants import UserRole
-from app.utils.date_utils import parse_iso_datetime
+from app.utils.date_utils import parse_iso_datetime, to_bolivia_tz
 from app.modules.auth.service import UserService
 from app.modules.children.repository import ChildRepository
 from app.modules.daycares.repository import DaycareRepository
@@ -89,6 +89,7 @@ async def new_child_tracking_websocket(
     try:
         while True:
             data = await websocket.receive_json()
+            logger.info(f"WebSocket [Dispositivo {child_code}]: Datos de telemetría recibidos: {data}")
             
             async with async_session_maker() as db:
                 try:
@@ -175,6 +176,7 @@ async def child_tracking_websocket(
         while True:
             # Esperar coordenadas en formato JSON
             data = await websocket.receive_json()
+            logger.info(f"WebSocket [{child_code}]: Datos de telemetría recibidos en endpoint legado: {data}")
             
             async with async_session_maker() as db:
                 try:
@@ -278,7 +280,7 @@ async def guardian_live_location_websocket(
                     "accuracy": last_loc.accuracy,
                     "is_inside_area": last_loc.is_inside_area,
                     "monitoring_status": monitoring_status,
-                    "received_at": last_loc.received_at.isoformat()
+                    "received_at": to_bolivia_tz(last_loc.received_at).isoformat()
                 }
                 await websocket.send_json(init_payload)
 
