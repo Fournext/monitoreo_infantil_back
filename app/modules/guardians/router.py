@@ -13,7 +13,7 @@ from app.modules.guardians.schemas import (
     GuardianCreateRequest, GuardianCreateResponse, GuardianResponse,
     GuardianResetPinResponse, GuardianChildLinkRequest, GuardianDaycareResponse,
     GuardianChildResponse, GuardianMonitoringSummaryResponse, GuardianChildrenListResponse,
-    LinkDaycareRequest, LinkChildRequest, LinkedDaycareResponse
+    LinkDaycareRequest, LinkChildRequest, LinkedDaycareResponse, GuardianAdminResponse
 )
 from app.modules.guardians.service import GuardianService
 from app.modules.alerts.service import AlertService
@@ -34,6 +34,36 @@ async def create_guardian(
     guardian = await GuardianService.create_guardian(db, guardian_in)
     await db.commit()
     return guardian
+
+# Admin: Listar tutores
+@router.get("", response_model=list[GuardianAdminResponse])
+async def list_guardians(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_daycare_manager)
+):
+    """
+    Retorna la lista de todos los tutores con su detalle de vinculaciones. (Acceso: ADMIN, DAYCARE_MANAGER)
+    """
+    return await GuardianService.list_all_guardians(db)
+
+# Admin: Vincular tutor con guardería
+@router.post("/{guardian_code}/link-daycare", status_code=status.HTTP_200_OK)
+async def link_daycare_admin(
+    guardian_code: str,
+    link_in: LinkDaycareRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_daycare_manager)
+):
+    """
+    Vincula un tutor con una guardería usando su código de tutor. (Acceso: ADMIN, DAYCARE_MANAGER)
+    """
+    await GuardianService.link_daycare_by_guardian_code(
+        db=db,
+        guardian_code=guardian_code,
+        daycare_code=link_in.daycare_code
+    )
+    await db.commit()
+    return {"message": "Guardería vinculada correctamente al tutor."}
 
 # Admin: Vincular tutor con niño
 @router.post("/{guardian_code}/link-child", status_code=status.HTTP_200_OK)

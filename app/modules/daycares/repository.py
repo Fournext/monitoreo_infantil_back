@@ -3,7 +3,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from geoalchemy2.elements import WKTElement
 from app.modules.daycares.models import Daycare
-from app.modules.daycares.schemas import DaycareCreate
+from app.modules.daycares.schemas import DaycareCreate, DaycareUpdate
 from app.shared.utils.code_generator import generate_daycare_code
 
 class DaycareRepository:
@@ -54,6 +54,7 @@ class DaycareRepository:
         )
         db.add(db_daycare)
         await db.flush()
+        await db.refresh(db_daycare)
         return db_daycare
 
     @staticmethod
@@ -64,4 +65,18 @@ class DaycareRepository:
         daycare.area = WKTElement(wkt_polygon, srid=4326)
         db.add(daycare)
         await db.flush()
+        await db.refresh(daycare)
+        return daycare
+
+    @staticmethod
+    async def update(db: AsyncSession, daycare: Daycare, daycare_in: DaycareUpdate) -> Daycare:
+        """
+        Actualiza los datos generales (nombre, dirección, estado) de una guardería.
+        """
+        update_data = daycare_in.model_dump(exclude_unset=True)
+        for key, value in update_data.items():
+            setattr(daycare, key, value)
+        db.add(daycare)
+        await db.flush()
+        await db.refresh(daycare)
         return daycare

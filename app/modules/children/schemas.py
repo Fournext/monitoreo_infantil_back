@@ -11,6 +11,12 @@ class ChildBase(BaseModel):
 class ChildCreate(ChildBase):
     daycare_id: uuid.UUID
 
+class ChildUpdate(BaseModel):
+    full_name: str | None = Field(default=None, min_length=2, max_length=100)
+    age: int | None = Field(default=None, ge=0, le=18)
+    status: ChildStatus | None = Field(default=None)
+    daycare_id: uuid.UUID | None = Field(default=None)
+
 class ChildResponse(ChildBase):
     id: uuid.UUID
     code: str

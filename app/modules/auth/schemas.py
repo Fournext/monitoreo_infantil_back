@@ -12,6 +12,13 @@ class UserBase(BaseModel):
 class UserCreate(UserBase):
     password: str = Field(..., min_length=6)
 
+class UserUpdate(BaseModel):
+    username: str | None = Field(default=None, min_length=3, max_length=50)
+    email: EmailStr | None = Field(default=None)
+    role: UserRole | None = Field(default=None)
+    daycare_id: uuid.UUID | None = Field(default=None)
+    password: str | None = Field(default=None, min_length=6)
+
 class UserLogin(BaseModel):
     username_or_email: str
     password: str

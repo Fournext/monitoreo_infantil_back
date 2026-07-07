@@ -135,3 +135,25 @@ class MonitoringSummaryResponse(BaseModel):
     total_children: int
     active_alerts: int
     children: list[MonitoringChildSummary]
+
+class GuardianAdminChild(BaseModel):
+    child_code: str
+    child_name: str
+    relationship: str
+
+class GuardianAdminDaycare(BaseModel):
+    daycare_code: str
+    daycare_name: str
+
+class GuardianAdminResponse(BaseModel):
+    id: uuid.UUID
+    code: str
+    full_name: str
+    phone: str | None = None
+    email: EmailStr | None = None
+    status: GuardianStatus
+    children: list[GuardianAdminChild]
+    daycares: list[GuardianAdminDaycare]
+
+    class Config:
+        from_attributes = True

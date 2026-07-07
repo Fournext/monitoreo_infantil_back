@@ -2,7 +2,7 @@ import uuid
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, or_
 from app.modules.auth.models import User
-from app.modules.auth.schemas import UserCreate
+from app.modules.auth.schemas import UserCreate, UserUpdate
 from app.core.security import get_password_hash
 
 class UserRepository:
@@ -46,4 +46,26 @@ class UserRepository:
         )
         db.add(db_user)
         await db.flush()
+        await db.refresh(db_user)
         return db_user
+
+    @staticmethod
+    async def get_all(db: AsyncSession) -> list[User]:
+        """Obtiene todos los usuarios del sistema ordenados por su username."""
+        result = await db.execute(select(User).order_by(User.username))
+        return list(result.scalars().all())
+
+    @staticmethod
+    async def update(db: AsyncSession, user: User, user_in: UserUpdate) -> User:
+        """Actualiza los campos de un usuario, encriptando la contraseña si se provee una nueva."""
+        update_data = user_in.model_dump(exclude_unset=True)
+        if "password" in update_data and update_data["password"]:
+            update_data["hashed_password"] = get_password_hash(update_data.pop("password"))
+        
+        for key, value in update_data.items():
+            setattr(user, key, value)
+            
+        db.add(user)
+        await db.flush()
+        await db.refresh(user)
+        return user

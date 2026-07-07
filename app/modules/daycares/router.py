@@ -2,7 +2,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, status, Body
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
-from app.modules.daycares.schemas import DaycareCreate, DaycareResponse
+from app.modules.daycares.schemas import DaycareCreate, DaycareResponse, DaycareUpdate
 from app.modules.daycares.service import DaycareService
 from app.modules.auth.service import require_roles
 from app.core.constants import UserRole
@@ -38,6 +38,20 @@ async def update_daycare_area(
     Espera un GeoJSON de tipo Polygon válido.
     """
     daycare = await DaycareService.update_daycare_area(db, daycare_code, geojson_area.model_dump())
+    await db.commit()
+    return daycare
+
+@router.put("/{daycare_code}", response_model=DaycareResponse)
+async def update_daycare(
+    daycare_code: str,
+    daycare_in: DaycareUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: Any = Depends(require_roles(UserRole.ADMIN))
+):
+    """
+    Actualiza los datos básicos (nombre, dirección, estado) de una guardería. (Acceso: ADMIN)
+    """
+    daycare = await DaycareService.update_daycare(db, daycare_code, daycare_in)
     await db.commit()
     return daycare
 

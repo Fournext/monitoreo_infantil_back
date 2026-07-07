@@ -10,6 +10,11 @@ class DaycareBase(BaseModel):
 
 class DaycareCreate(DaycareBase):
     pass
+#esto aumente
+class DaycareUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=2, max_length=100)
+    address: str | None = Field(default=None, max_length=255)
+    status: DaycareStatus | None = Field(default=None)
 
 class DaycareResponse(DaycareBase):
     id: uuid.UUID

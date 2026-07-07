@@ -5,7 +5,7 @@ from shapely.geometry import mapping
 from app.core.exceptions import NotFoundException
 from app.modules.daycares.models import Daycare
 from app.modules.daycares.repository import DaycareRepository
-from app.modules.daycares.schemas import DaycareCreate, DaycareResponse
+from app.modules.daycares.schemas import DaycareCreate, DaycareResponse, DaycareUpdate
 from app.shared.geo.spatial_service import SpatialService
 
 class DaycareService:
@@ -69,4 +69,16 @@ class DaycareService:
 
         # Actualizar área
         updated_daycare = await DaycareRepository.update_area(db, daycare, wkt_polygon)
+        return cls._map_to_response(updated_daycare)
+#esto aumente
+    @classmethod
+    async def update_daycare(cls, db: AsyncSession, code: str, daycare_in: DaycareUpdate) -> DaycareResponse:
+        """
+        Actualiza los datos básicos de una guardería por su código único de negocio.
+        """
+        daycare = await DaycareRepository.get_by_code(db, code)
+        if not daycare:
+            raise NotFoundException(f"Guardería con código '{code}' no encontrada.")
+
+        updated_daycare = await DaycareRepository.update(db, daycare, daycare_in)
         return cls._map_to_response(updated_daycare)
