@@ -1,12 +1,10 @@
-version: '3.8'
-
 services:
   postgres-postgis:
-    image: postgis/postgis:15-3.3
+    image: postgis/postgis:17-3.5
     container_name: postgres_postgis_db
     environment:
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
+      POSTGRES_PASSWORD: 071104
       POSTGRES_DB: monitoring_db
     ports:
       - "5432:5432"
@@ -25,14 +23,11 @@ services:
       - "8000:8000"
     volumes:
       - .:/workspace
+    env_file:
+      - .env
     environment:
-      - DATABASE_URL=postgresql+asyncpg://postgres:postgres@postgres-postgis:5432/monitoring_db
-      - SECRET_KEY=change_me
-      - FIREBASE_CREDENTIALS_PATH=./firebase-service-account.json
-      - ALERT_OUTSIDE_CONSECUTIVE_LIMIT=3
-      - ALERT_OUTSIDE_SECONDS_LIMIT=15
-      - ALERT_COOLDOWN_SECONDS=300
-      - GPS_TOLERANCE_METERS=15
+      - DATABASE_URL=postgresql+asyncpg://postgres:071104@postgres-postgis:5432/monitoring_db
+    command: bash -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
     depends_on:
       postgres-postgis:
         condition: service_healthy
