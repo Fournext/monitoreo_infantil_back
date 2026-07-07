@@ -1,8 +1,9 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 from app.core.security import create_access_token
 from app.core.constants import UserRole
+from app.core.exceptions import BadRequestException
 from app.modules.auth.schemas import (
     UserCreate, UserLogin, UserResponse, TokenResponse,
     GuardianLoginRequest, ChangePinRequest, CurrentUserResponse, UserUpdate
@@ -14,6 +15,68 @@ from app.modules.auth.models import User
 
 router = APIRouter(prefix="/api/auth", tags=["Autenticación"])
 
+async def get_login_data(request: Request) -> UserLogin:
+    content_type = request.headers.get("content-type", "")
+    if "application/x-www-form-urlencoded" in content_type:
+        form_data = await request.form()
+        username = form_data.get("username")
+        password = form_data.get("password")
+        if not username or not password:
+            raise BadRequestException("Falta username o password en el formulario.")
+        return UserLogin(username_or_email=str(username), password=str(password))
+    else:
+        try:
+            body = await request.json()
+            username_or_email = body.get("username_or_email") or body.get("username")
+            password = body.get("password")
+            if not username_or_email or not password:
+                raise BadRequestException("Falta username/correo o contraseña.")
+            return UserLogin(username_or_email=username_or_email, password=password)
+        except Exception as e:
+            if isinstance(e, BadRequestException):
+                raise
+            raise BadRequestException("Cuerpo de petición inválido (se esperaba JSON o Form-urlencoded).")
+
+@router.post(
+    "/login", 
+    response_model=TokenResponse,
+    openapi_extra={
+        "requestBody": {
+            "content": {
+                "application/json": {
+                    "schema": {
+                        "type": "object",
+                        "properties": {
+                            "username_or_email": {"type": "string", "example": "admin"},
+                            "password": {"type": "string", "example": "adminpassword"}
+                        },
+                        "required": ["username_or_email", "password"]
+                    }
+                },
+                "application/x-www-form-urlencoded": {
+                    "schema": {
+                        "type": "object",
+                        "properties": {
+                            "username": {"type": "string"},
+                            "password": {"type": "string"}
+                        },
+                        "required": ["username", "password"]
+                    }
+                }
+            }
+        }
+    }
+)
+async def login(request: Request, db: AsyncSession = Depends(get_db)):
+    """
+    Autentica a un usuario y genera su token de acceso JWT.
+    Soporta formato JSON (para clientes web/móvil) y Form-urlencoded (para el botón 'Authorize' de Swagger).
+    """
+    login_data = await get_login_data(request)
+    user = await UserService.authenticate(db, login_data)
+    access_token = create_access_token(data={"sub": str(user.id), "role": user.role})
+    return TokenResponse(access_token=access_token, user=user)
+
 @router.post("/register", response_model=UserResponse, status_code=201)
 async def register(user_in: UserCreate, db: AsyncSession = Depends(get_db)):
     """
@@ -22,15 +85,6 @@ async def register(user_in: UserCreate, db: AsyncSession = Depends(get_db)):
     user = await UserService.register(db, user_in)
     await db.commit()
     return user
-
-@router.post("/login", response_model=TokenResponse)
-async def login(login_data: UserLogin, db: AsyncSession = Depends(get_db)):
-    """
-    Autentica a un usuario y genera su token de acceso JWT.
-    """
-    user = await UserService.authenticate(db, login_data)
-    access_token = create_access_token(data={"sub": str(user.id), "role": user.role})
-    return TokenResponse(access_token=access_token, user=user)
 
 @router.post("/guardian/login", response_model=TokenResponse)
 async def guardian_login(login_data: GuardianLoginRequest, db: AsyncSession = Depends(get_db)):
