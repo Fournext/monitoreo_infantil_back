@@ -45,9 +45,9 @@ class AdminAlertResponse(BaseModel):
     status: AlertStatus
     title: str
     message: str
-    created_at: datetime
-    updated_at: datetime
-    resolved_at: datetime | None = None
+    created_at: BoliviaDateTime
+    updated_at: BoliviaDateTime
+    resolved_at: BoliviaDateTime | None = None
 
     class Config:
         from_attributes = True
@@ -68,9 +68,9 @@ class AdminAlertResponse(BaseModel):
     status: AlertStatus
     title: str
     message: str
-    created_at: datetime
-    updated_at: datetime
-    resolved_at: datetime | None = None
+    created_at: BoliviaDateTime
+    updated_at: BoliviaDateTime
+    resolved_at: BoliviaDateTime | None = None
 
     class Config:
         from_attributes = True
