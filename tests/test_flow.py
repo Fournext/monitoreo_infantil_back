@@ -16,6 +16,13 @@ from app.shared.geo.spatial_service import SpatialService
 def mock_db():
     db = MagicMock()
     db.execute = AsyncMock()
+    
+    result = MagicMock()
+    result.scalar_one_or_none = MagicMock(return_value=None)
+    result.scalars.return_value.all = MagicMock(return_value=[])
+    result.scalars.return_value.first = MagicMock(return_value=None)
+    
+    db.execute.return_value = result
     db.commit = AsyncMock()
     db.rollback = AsyncMock()
     db.flush = AsyncMock()
@@ -235,3 +242,57 @@ async def test_process_location_outside_alert_trigger(
     # Debe crear ubicación e intentar enviar push
     assert mock_create_loc.called
     assert mock_send_push.called
+
+
+@pytest.mark.asyncio
+@patch("app.modules.alerts.repository.AlertRepository.get_by_code")
+async def test_update_alert_resolved_to_viewed_raises_bad_request(mock_get_by_code, mock_db):
+    from app.modules.alerts.service import AlertService
+    from app.core.exceptions import BadRequestException
+    
+    alert = MagicMock()
+    alert.status = AlertStatus.RESOLVED
+    alert.child_id = uuid.uuid4()
+    mock_get_by_code.return_value = alert
+    
+    with pytest.raises(BadRequestException) as exc_info:
+        await AlertService.update_status_by_code(
+            db=mock_db,
+            code="ALT-00001",
+            new_status=AlertStatus.VIEWED,
+            guardian_id=uuid.uuid4(),
+            is_admin=True
+        )
+    
+    assert "No se puede marcar como vista una alerta que ya ha sido resuelta" in str(exc_info.value)
+
+
+def test_alert_properties_serialization():
+    from app.modules.alerts.schemas import AlertResponse
+    from app.modules.alerts.models import Alert
+    from app.modules.children.models import Child
+    from app.modules.daycares.models import Daycare
+    from app.core.constants import AlertSeverity
+    
+    daycare = Daycare(code="GUA-001", name="Guarderia Pinos")
+    child = Child(code="NIN-001", full_name="Juan Perez", daycare=daycare)
+    alert = Alert(
+        id=uuid.uuid4(),
+        code="ALT-001",
+        child_id=uuid.uuid4(),
+        daycare_id=uuid.uuid4(),
+        alert_type=AlertType.OUT_OF_AREA,
+        severity=AlertSeverity.HIGH,
+        status=AlertStatus.NEW,
+        title="Alerta",
+        message="Mensaje",
+        created_at=datetime.now(timezone.utc),
+        updated_at=datetime.now(timezone.utc),
+        child=child
+    )
+    
+    response = AlertResponse.model_validate(alert)
+    assert response.child_code == "NIN-001"
+    assert response.child_name == "Juan Perez"
+    assert response.daycare_code == "GUA-001"
+    assert response.daycare_name == "Guarderia Pinos"

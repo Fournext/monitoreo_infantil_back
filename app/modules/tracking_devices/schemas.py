@@ -2,6 +2,7 @@ import uuid
 from datetime import datetime
 from pydantic import BaseModel, Field
 from app.core.constants import PairingCodeStatus, DeviceType
+from app.utils.date_utils import BoliviaDateTime
 
 class PairingCodeCreate(BaseModel):
     child_code: str = Field(..., min_length=3)
@@ -13,14 +14,14 @@ class PairingCodeResponse(BaseModel):
     child_name: str
     daycare_code: str
     daycare_name: str
-    expires_at: datetime
+    expires_at: BoliviaDateTime
     qr_payload: str
 
 class PairingCodeListResponse(BaseModel):
     code: str
     status: PairingCodeStatus
-    expires_at: datetime
-    used_at: datetime | None = None
+    expires_at: BoliviaDateTime
+    used_at: BoliviaDateTime | None = None
     child_code: str
     child_name: str
     daycare_code: str
@@ -55,8 +56,8 @@ class DeviceDetails(BaseModel):
     platform: str | None = None
     device_identifier: str | None = None
     is_active: bool
-    last_seen_at: datetime | None = None
-    paired_at: datetime | None = None
+    last_seen_at: BoliviaDateTime | None = None
+    paired_at: BoliviaDateTime | None = None
 
 class ChildTrackerResponse(BaseModel):
     child_code: str

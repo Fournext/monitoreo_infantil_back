@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import settings
 from app.core.exceptions import NotFoundException
 from app.core.constants import AlertStatus, AlertType, AlertSeverity
-from app.utils.date_utils import get_now
+from app.utils.date_utils import get_now, to_bolivia_tz
 from app.modules.children.repository import ChildRepository
 from app.modules.daycares.repository import DaycareRepository
 from app.modules.guardians.repository import GuardianRepository
@@ -136,6 +136,22 @@ class LocationService:
 
         # Si está adentro, reiniciamos y no evaluamos alertas
         if is_inside_area:
+            logger.info(f"Ubicación de {child.full_name} ({child.code}) dentro del área de la guardería. No se requiere alerta.")
+            # Auto-resolver alerta(s) OUT_OF_AREA activa(s) si el niño regresó al área
+            resolved_count = 0
+            while True:
+                active_alert = await AlertRepository.get_active_alert_by_child_and_type(
+                    db=db,
+                    child_id=child.id,
+                    alert_type=AlertType.OUT_OF_AREA
+                )
+                if not active_alert:
+                    break
+                await AlertRepository.update_status(db, active_alert, AlertStatus.RESOLVED)
+                resolved_count += 1
+            
+            if resolved_count > 0:
+                logger.info(f"Se auto-resolvieron {resolved_count} alerta(s) OUT_OF_AREA para el niño {child.full_name} al reingresar al área.")
             return
 
         # 5. Evaluar reglas de Alertas
@@ -156,6 +172,7 @@ class LocationService:
                 break
 
         trigger_alert = False
+        duration = 0.0
         
         # Regla A: 3 Lecturas consecutivas fuera
         if consecutive_outside >= settings.ALERT_OUTSIDE_CONSECUTIVE_LIMIT:
@@ -168,6 +185,12 @@ class LocationService:
                 trigger_alert = True
 
         if not trigger_alert:
+            logger.info(
+                f"Ubicación de {child.full_name} ({child.code}) evaluada fuera del área. Alerta NO lista para enviarse. "
+                f"Estado de reglas: "
+                f"1) Lecturas consecutivas fuera: {consecutive_outside}/{settings.ALERT_OUTSIDE_CONSECUTIVE_LIMIT}. "
+                f"2) Tiempo transcurrido fuera: {duration:.1f}s/{settings.ALERT_OUTSIDE_SECONDS_LIMIT}s."
+            )
             return
 
         # Validar si ya existe una alerta activa OUT_OF_AREA
@@ -178,8 +201,16 @@ class LocationService:
         )
 
         if active_alert:
-            # Ya hay una alerta en curso, no duplicamos
+            logger.info(
+                f"Alerta de salida de área para {child.full_name} ({child.code}) lista para dispararse, "
+                f"pero se omitió el envío porque ya existe una alerta activa (Código: {active_alert.code}, Estado: {active_alert.status.value})."
+            )
             return
+
+        logger.info(
+            f"REGLAS DE ALERTA CUMPLIDAS para {child.full_name} ({child.code}). "
+            f"Creando nueva alerta de seguridad..."
+        )
 
         # Crear nueva alerta
         from app.shared.utils.code_generator import generate_alert_code
@@ -214,16 +245,23 @@ class LocationService:
         )
         db.add(new_alert)
         await db.flush()
+        logger.info(f"Nueva alerta creada: {new_alert.code} (ID: {new_alert.id}). Iniciando envío a tutores...")
 
         # 6. Despachar notificaciones push a todos los tutores vinculados al niño
         guardians = await GuardianRepository.get_guardians_by_child(db, child.id)
         
+        if not guardians:
+            logger.warning(f"No se encontraron tutores vinculados para el niño {child.full_name} ({child.code}).")
+        
         for guardian in guardians:
             # Obtener dispositivos registrados del tutor
             devices = await DeviceRepository.get_active_guardian_devices(db, guardian.id)
+            if not devices:
+                logger.info(f"Tutor {guardian.full_name} (ID: {guardian.id}) no tiene ningún dispositivo registrado.")
             
             for device in devices:
                 if not device.fcm_token:
+                    logger.info(f"Omitiendo dispositivo {device.id} de tutor {guardian.full_name}: no tiene FCM token.")
                     continue
 
                 # Cooldown de 5 minutos para evitar spam de notificaciones por tutor
@@ -238,8 +276,17 @@ class LocationService:
                 
                 cooldown_result = await db.execute(cooldown_query)
                 if cooldown_result.scalar_one_or_none():
-                    logger.info(f"Notificación omitida para el tutor {guardian.id} debido a cooldown activo.")
+                    logger.info(
+                        f"Notificación de alerta {new_alert.code} OMITIDA para el tutor {guardian.full_name} "
+                        f"en dispositivo {device.id} debido a cooldown activo. "
+                        f"Requiere esperar {settings.ALERT_COOLDOWN_SECONDS}s desde la última notificación."
+                    )
                     continue
+
+                logger.info(
+                    f"Notificación de alerta {new_alert.code} APROBADA para envío al tutor {guardian.full_name} "
+                    f"en el dispositivo {device.id} (FCM token: {device.fcm_token[:8]}...)."
+                )
 
                 # Preparar payload FCM
                 push_data = {
@@ -251,7 +298,7 @@ class LocationService:
                     "alert_type": AlertType.OUT_OF_AREA.value,
                     "severity": AlertSeverity.HIGH.value,
                     "status": AlertStatus.NEW.value,
-                    "created_at": new_alert.created_at.isoformat(),
+                    "created_at": to_bolivia_tz(new_alert.created_at).isoformat(),
                     "open_map": "false"
                 }
 

@@ -3,6 +3,8 @@ from datetime import datetime
 from pydantic import BaseModel, EmailStr, Field
 from app.core.constants import UserRole
 
+from app.utils.date_utils import BoliviaDateTime
+
 class UserBase(BaseModel):
     username: str = Field(..., min_length=3, max_length=50)
     email: EmailStr
@@ -25,7 +27,7 @@ class UserLogin(BaseModel):
 
 class UserResponse(UserBase):
     id: uuid.UUID
-    created_at: datetime
+    created_at: BoliviaDateTime
 
     class Config:
         from_attributes = True

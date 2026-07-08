@@ -17,12 +17,12 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 10080  # 7 días
 
     # Notificaciones FCM
-    FIREBASE_CREDENTIALS_PATH: str = Field(default="./firebase-service-account.json")
+    FIREBASE_CREDENTIALS_PATH: str = Field(default="./monitoreo-infantil-da5a9-firebase-adminsdk-fbsvc-07772f0451.json")
 
     # Parámetros del motor de alertas
     ALERT_OUTSIDE_CONSECUTIVE_LIMIT: int = Field(default=3)
     ALERT_OUTSIDE_SECONDS_LIMIT: int = Field(default=15)
-    ALERT_COOLDOWN_SECONDS: int = Field(default=300)
-    GPS_TOLERANCE_METERS: float = Field(default=15.0)
+    ALERT_COOLDOWN_SECONDS: int = Field(default=5)
+    GPS_TOLERANCE_METERS: float = Field(default=3.0)
 
 settings = Settings()

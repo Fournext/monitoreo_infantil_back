@@ -1,6 +1,9 @@
 from typing import Any
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
+from geoalchemy2 import Geography
+from geoalchemy2.elements import WKBElement, WKTElement
+from geoalchemy2.shape import to_shape
 from geoalchemy2.elements import WKTElement
 from app.shared.geo.geojson_utils import validate_polygon_geojson, geojson_to_polygon_wkt
 
@@ -33,10 +36,15 @@ class SpatialService:
         if daycare_area is None or point is None:
             return False
             
+        # Si daycare_area es un objeto espacial (como WKBElement cargado de la BD),
+        # lo convertimos a WKT string para evitar fallos de parseo en ST_GeogFromText
+        if isinstance(daycare_area, (WKBElement, WKTElement)):
+            daycare_area = to_shape(daycare_area).wkt
+            
         # Casteo de geometry a geography para ST_DWithin
         query = select(func.ST_DWithin(
-            func.cast(daycare_area, func.Geography),
-            func.cast(point, func.Geography),
+            func.cast(daycare_area, Geography),
+            func.cast(point, Geography),
             tolerance_meters
         ))
         result = await db.execute(query)

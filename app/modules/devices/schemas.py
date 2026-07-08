@@ -2,6 +2,7 @@ import uuid
 from datetime import datetime
 from pydantic import BaseModel, Field
 from app.core.constants import DeviceType
+from app.utils.date_utils import BoliviaDateTime
 
 class FcmTokenRegisterRequest(BaseModel):
     fcm_token: str = Field(..., min_length=10)
@@ -23,8 +24,8 @@ class DeviceResponse(BaseModel):
     device_identifier: str | None = None
     platform: str | None = None
     is_active: bool
-    created_at: datetime
-    updated_at: datetime
+    created_at: BoliviaDateTime
+    updated_at: BoliviaDateTime
 
     class Config:
         from_attributes = True

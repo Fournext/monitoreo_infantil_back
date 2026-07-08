@@ -16,6 +16,15 @@ class FirebaseNotificationService:
         if cls._initialized:
             return True
         
+        # Verificar si Firebase ya fue inicializado (ej. por hot-reloads o en otra sección)
+        try:
+            firebase_admin.get_app()
+            cls._initialized = True
+            logger.info("Firebase Admin SDK ya estaba inicializado (App por defecto existente).")
+            return True
+        except ValueError:
+            pass
+        
         cred_path = settings.FIREBASE_CREDENTIALS_PATH
         if os.path.exists(cred_path):
             try:

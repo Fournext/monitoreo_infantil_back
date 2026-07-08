@@ -53,4 +53,5 @@ class DeviceRepository:
             db.add(device)
 
         await db.flush()
+        await db.refresh(device)
         return device

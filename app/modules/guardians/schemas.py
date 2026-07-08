@@ -2,6 +2,7 @@ import uuid
 from datetime import datetime
 from pydantic import BaseModel, EmailStr, Field
 from app.core.constants import GuardianStatus, ChildStatus
+from app.utils.date_utils import BoliviaDateTime
 
 class GuardianBase(BaseModel):
     full_name: str = Field(..., min_length=2, max_length=100)
@@ -61,12 +62,15 @@ class GuardianDaycareResponse(BaseModel):
     class Config:
         from_attributes = True
 
+from app.shared.geo.schemas import GeoJSONPolygon
+
 class LinkedDaycareResponse(BaseModel):
     id: uuid.UUID
     code: str
     name: str
     address: str | None = None
     status: str
+    area: GeoJSONPolygon | None = None
 
     class Config:
         from_attributes = True
@@ -76,7 +80,7 @@ class LocationSchema(BaseModel):
     longitude: float
     accuracy: float | None = None
     is_inside_area: bool
-    received_at: datetime
+    received_at: BoliviaDateTime
 
     class Config:
         from_attributes = True
@@ -104,7 +108,7 @@ class GuardianChildResponse(BaseModel):
     daycare_name: str
     monitoring_status: str
     has_active_alert: bool
-    last_location_at: datetime | None = None
+    last_location_at: BoliviaDateTime | None = None
 
     class Config:
         from_attributes = True
@@ -120,7 +124,7 @@ class MonitoringChildSummary(BaseModel):
     daycare_name: str
     monitoring_status: str  # INSIDE_AREA, OUTSIDE_AREA, NO_LOCATION
     has_active_alert: bool
-    last_location_at: datetime | None = None
+    last_location_at: BoliviaDateTime | None = None
 
     class Config:
         from_attributes = True
