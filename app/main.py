@@ -26,7 +26,7 @@ app = FastAPI(
 # Habilitar CORS para permitir integraciones con la app Web y Flutter
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://181.188.137.252:5173", "http://localhost:5173", "http://localhost:8000", "http://localhost:3000", "http://localhost:8080"],
+    allow_origins=["http://181.188.137.252:5173", "http://localhost:5173", "http://localhost:8000", "http://localhost:3000", "http://localhost:8080", "http://54.242.59.206:8080"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
