@@ -4,7 +4,7 @@ services:
     container_name: postgres_postgis_db
     environment:
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: 071104
+      POSTGRES_PASSWORD: "071104"
       POSTGRES_DB: monitoring_db
     ports:
       - "5432:5432"
@@ -27,7 +27,7 @@ services:
       - .env
     environment:
       - DATABASE_URL=postgresql+asyncpg://postgres:071104@postgres-postgis:5432/monitoring_db
-    command: bash -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
+    command: bash -c "alembic upgrade head && python -m app.db.init_db && uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
     depends_on:
       postgres-postgis:
         condition: service_healthy
