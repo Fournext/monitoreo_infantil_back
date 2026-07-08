@@ -1,4 +1,5 @@
 import uuid
+from typing import Any
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.exceptions import NotFoundException, ForbiddenException, BadRequestException
 from app.core.constants import AlertStatus
@@ -70,12 +71,11 @@ class AlertService:
         db: AsyncSession,
         code: str,
         new_status: AlertStatus,
-        guardian_id: uuid.UUID | None,
-        is_admin: bool
+        current_user: Any
     ) -> AlertResponse:
         """
         Actualiza el estado de una alerta por su código de negocio.
-        Seguridad: Valida que el tutor solicitante tenga vinculación activa con el niño de la alerta.
+        Seguridad: Valida que el usuario tenga permisos suficientes según su rol y guardería.
         """
         alert = await AlertRepository.get_by_code(db, code)
         if not alert:
@@ -85,14 +85,26 @@ class AlertService:
         if alert.status == AlertStatus.RESOLVED and new_status == AlertStatus.VIEWED:
             raise BadRequestException("No se puede marcar como vista una alerta que ya ha sido resuelta.")
 
-        # Validaciones de seguridad
-        if not is_admin:
-            if not guardian_id:
-                raise ForbiddenException("Usuario no tiene perfil de tutor.")
-            
-            link = await GuardianRepository.get_child_link(db, guardian_id, alert.child_id)
+        # Validaciones de seguridad por rol
+        from app.modules.guardians.models import Guardian
+        from app.core.constants import UserRole
+
+        is_guardian = isinstance(current_user, Guardian)
+
+        if is_guardian:
+            link = await GuardianRepository.get_child_link(db, current_user.id, alert.child_id)
             if not link:
                 raise ForbiddenException("No tienes permisos para modificar el estado de esta alerta.")
+        else:
+            # Es personal interno (ADMIN, DAYCARE_MANAGER, OPERATOR, MONITOR)
+            if current_user.role == UserRole.ADMIN:
+                pass # El administrador tiene acceso global
+            elif current_user.role in (UserRole.DAYCARE_MANAGER, UserRole.OPERATOR, UserRole.MONITOR):
+                # Si el usuario tiene asignada una guardería específica, restringir a esa guardería
+                if current_user.daycare_id and alert.daycare_id != current_user.daycare_id:
+                    raise ForbiddenException("No tienes permisos para modificar alertas de otra guardería.")
+            else:
+                raise ForbiddenException("Rol de usuario no autorizado para modificar esta alerta.")
 
         updated_alert = await AlertRepository.update_status(db, alert, new_status)
         return AlertResponse.model_validate(updated_alert)
